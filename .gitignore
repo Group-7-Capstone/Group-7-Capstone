@@ -1,0 +1,24 @@
+# Data and local databases (never commit)
+data/raw/
+data/processed/
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.gpkg
+*.csv
+
+# Environment and secrets
+.venv/
+.env
+
+# Python / notebooks
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.Rhistory
