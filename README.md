@@ -1,4 +1,4 @@
-# Group 7 Capstone: NYC DOT Red Light Camera Effectiveness
+# Group 7: Automated Traffic Enforcement in NYC
 
 A three-month Columbia data science capstone with the **NYC DOT enforcement unit**, under **Vision Zero**.
 
@@ -44,13 +44,6 @@ To add a package, run `uv add <pkg>`. Dev tools go in the dev group: `uv add --d
 | Parking Violations Issued (one dataset per fiscal year), e.g. [FY2027](https://data.cityofnewyork.us/City-Government/Parking-Violations-Issued-Fiscal-Year-2027/pvqr-7yc4) | `pvqr-7yc4` |
 
 **Pending:** MIT "NYC Walks" pedestrian model ([City Form Lab](https://cityform.mit.edu/projects/nycwalks)) and DOT crash narratives (MV-104).
-
-## Background
-- **Wilmington, DE:** [program report](https://deldot.gov/Programs/red_light/pdfs/WilmRedLightCameraProgramReportwithAppendices.pdf), [site selection methodology](https://deldot.gov/Programs/red_light/pdfs/2015ERLSPSiteSelectionReportwithAppendices.pdf)
-- **Bellevue, WA:** [Vision Zero StoryMap](https://storymaps.arcgis.com/stories/a955ef85c8f245eaabbda05742e6167f), [methodology](https://bellevue.legistar.com/View.ashx?M=F&ID=14991801&GUID=0EA20F5F-FF00-47A0-B57D-2C619D8F5BE9)
-- **Chicago:** [equitable RLC distribution](https://www.chicago.gov/content/dam/city/depts/cdot/Red%20Light%20Cameras/2022/Sutton+Tilahun_Chicago-Camera-Ticket_Exec%20Summary-Final-Jan10.pdf)
-- **Camera deactivation and relocation effects:** [Springer article](https://link.springer.com/article/10.1007/s43762-022-00043-0)
-- Also reviewed: *Causal decision-making for speed camera allocation* and *Can speed cameras make streets safer? Quasi-experimental evidence from New York City*
 
 ## Contributing
 Work is tracked in GitHub Issues grouped into epics. Keep PRs to one issue and under about 500 lines. Rules for coding agents and contributors are in [`AGENTS.md`](AGENTS.md), and current work is in [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
