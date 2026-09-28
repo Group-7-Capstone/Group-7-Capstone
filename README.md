@@ -19,7 +19,7 @@ data/ → preprocessing/ → model/ → validation/
 | `preprocessing/` | All cleaning, filtering, joins, spatial snapping and features, plus the inferred camera attributes |
 | `model/` | Fit models on preprocessed data |
 | `validation/` | Standard metrics and data QA/QC for any model |
-| `eda/`, `experiments/` | Numbered notebooks that import from the layers |
+| `yourname/` | Place for R&D for each team member at the start |
 | `tests/` | `pytest` tests |
 
 ## Setup
