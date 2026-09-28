@@ -1,6 +1,6 @@
 # Group 7: Automated Traffic Enforcement in NYC
 
-A three-month Columbia data science capstone with the **NYC DOT enforcement unit**, under **Vision Zero**.
+A three-month Columbia data science capstone with **NYC DOT Town+Gown**, under **Vision Zero**.
 
 **Team 7:** Claire Gallagher, Eric Yi, Yihan Hu, Fei Xue, Jacob Boyar
 
