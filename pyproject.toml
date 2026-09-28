@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv",
     "geopandas",
     "matplotlib",
+    "sodapy"
 ]
 
 [dependency-groups]
