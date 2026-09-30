@@ -48,6 +48,35 @@ def _cached_pull(table_name: str, dataset_id: str, where: str) -> pd.DataFrame |
         con.close()
 
 
+def _fetch_pages(
+    client: Socrata, dataset_id: str, where: str, table_name: str, limit: int = 50000
+) -> list[dict]:
+    """Page through a SODA query by `:id` rather than `$offset`.
+
+    Socrata's offset pagination re-scans and discards every prior row on each
+    page, so cost grows with the offset; for the multi-million-row pulls here
+    that turns a few minutes into hours. Keyset paging on `:id` stays O(n).
+    """
+    records: list[dict] = []
+    cursor: str | None = None
+    with tqdm(desc=f"{table_name} rows", unit=" rows") as pbar:
+        while True:
+            page_where = where if cursor is None else f"({where}) AND :id > '{cursor}'"
+            page = client.get(
+                dataset_id, select="*,:id", where=page_where, order=":id", limit=limit
+            )
+            if not page:
+                break
+            cursor = page[-1][":id"]
+            for row in page:
+                row.pop(":id", None)
+            records.extend(page)
+            pbar.update(len(page))
+            if len(page) < limit:
+                break
+    return records
+
+
 def fetch_soda(
     dataset_id: str, table_name: str, where: str, force: bool = False
 ) -> pd.DataFrame:
@@ -61,8 +90,7 @@ def fetch_soda(
         if cached is not None:
             return cached
 
-    records = _client().get_all(dataset_id, where=where, order=":id", limit=50000)
-    records = list(tqdm(records, desc=f"{table_name} rows", unit=" rows"))
+    records = _fetch_pages(_client(), dataset_id, where, table_name)
     df = pd.DataFrame.from_records(records)
 
     con = get_connection()
