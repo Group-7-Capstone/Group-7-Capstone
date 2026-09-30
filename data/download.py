@@ -10,6 +10,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from sodapy import Socrata
+from tqdm import tqdm
 from urllib3.util.retry import Retry
 from data.base import PROVENANCE_TABLE, get_connection
 
@@ -61,6 +62,7 @@ def fetch_soda(
             return cached
 
     records = _client().get_all(dataset_id, where=where, order=":id", limit=50000)
+    records = list(tqdm(records, desc=f"{table_name} rows", unit=" rows"))
     df = pd.DataFrame.from_records(records)
 
     con = get_connection()
