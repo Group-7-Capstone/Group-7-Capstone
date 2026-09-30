@@ -1,6 +1,4 @@
 """Pull raw data from NYC Open Data into the local DuckDB cache.
-
-Only downloads. No value changes, no modeling filters (see AGENTS.md).
 Receipt of each pull is logged in the `_provenance` table with the dataset ID, the
 exact query, and the pull timestamp. A pull already in the cache is
 served from there instead of hitting the API again, unless `force=True`.
@@ -8,11 +6,11 @@ served from there instead of hitting the API again, unless `force=True`.
 
 import os
 from datetime import datetime, timezone
-
 import pandas as pd
 from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
 from sodapy import Socrata
-
+from urllib3.util.retry import Retry
 from data.base import PROVENANCE_TABLE, get_connection
 
 load_dotenv()
@@ -22,7 +20,16 @@ SOCRATA_DOMAIN = "data.cityofnewyork.us"
 
 def _client() -> Socrata:
     token = os.getenv("SOCRATA_APP_TOKEN")
-    return Socrata(SOCRATA_DOMAIN, token)
+    retry = Retry(
+        total=5,
+        read=5,
+        connect=5,
+        backoff_factor=2,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+    )
+    adapter = {"prefix": "https://", "adapter": HTTPAdapter(max_retries=retry)}
+    return Socrata(SOCRATA_DOMAIN, token, session_adapter=adapter, timeout=90)
 
 
 def _cached_pull(table_name: str, dataset_id: str, where: str) -> pd.DataFrame | None:
@@ -53,7 +60,7 @@ def fetch_soda(
         if cached is not None:
             return cached
 
-    records = _client().get_all(dataset_id, where=where, order=":id")
+    records = _client().get_all(dataset_id, where=where, order=":id", limit=50000)
     df = pd.DataFrame.from_records(records)
 
     con = get_connection()
