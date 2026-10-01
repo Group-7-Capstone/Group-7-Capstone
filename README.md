@@ -45,5 +45,5 @@ To add a package, run `uv add <pkg>`. Dev tools go in the dev group: `uv add --d
 
 **Pending:** MIT "NYC Walks" pedestrian model ([City Form Lab](https://cityform.mit.edu/projects/nycwalks)) and DOT crash narratives (MV-104).
 
-## Contributing
+## Contributing1
 Work is tracked in GitHub Issues grouped into epics. Keep PRs to one issue and under about 500 lines. Rules for coding agents and contributors are in [`AGENTS.md`](AGENTS.md), and current work is in [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
