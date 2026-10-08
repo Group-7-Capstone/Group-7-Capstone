@@ -22,14 +22,15 @@ def test_fetch_pages_pages_by_id_cursor_not_offset():
     ]
     client = _FakeClient(pages)
 
-    records = _fetch_pages(
-        client, "abcd-1234", "violation_code IN (7, 36)", "tickets_test", limit=2
+    pages = list(
+        _fetch_pages(
+            client, "abcd-1234", "violation_code IN (7, 36)", "tickets_test", limit=2
+        )
     )
 
-    assert records == [
-        {"summons_number": "1"},
-        {"summons_number": "2"},
-        {"summons_number": "3"},
+    assert pages == [
+        [{"summons_number": "1"}, {"summons_number": "2"}],
+        [{"summons_number": "3"}],
     ]
     assert client.calls[0]["where"] == "violation_code IN (7, 36)"
     assert client.calls[1]["where"] == "(violation_code IN (7, 36)) AND :id > 'row-b'"
@@ -38,6 +39,8 @@ def test_fetch_pages_pages_by_id_cursor_not_offset():
 def test_fetch_pages_empty_result():
     client = _FakeClient([[]])
 
-    records = _fetch_pages(client, "abcd-1234", "violation_code IN (7, 36)", "tickets_test")
+    pages = list(
+        _fetch_pages(client, "abcd-1234", "violation_code IN (7, 36)", "tickets_test")
+    )
 
-    assert records == []
+    assert pages == []
