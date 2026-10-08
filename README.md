@@ -31,6 +31,9 @@ uv run jupyter lab   # notebooks: select the .venv kernel
 ```
 To add a package, run `uv add <pkg>`. Dev tools go in the dev group: `uv add --dev <pkg>`.
 
+Optional: copy `.env.example` to `.env` and add your own free Socrata app token from the
+[NYC Open Data portal](https://data.cityofnewyork.us/profile/app_tokens). The API works without one, but larger or repeated pulls are throttled harder unauthenticated.
+
 ## Data sources (NYC Open Data)
 | Dataset | ID |
 |---|---|

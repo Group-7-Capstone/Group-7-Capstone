@@ -12,7 +12,8 @@ dependencies = [
     "python-dotenv",
     "geopandas",
     "matplotlib",
-    "sodapy"
+    "sodapy",
+    "tqdm>=4.70.1",
 ]
 
 [dependency-groups]
@@ -22,3 +23,6 @@ dev = [
     "jupyterlab",
     "ruff",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
