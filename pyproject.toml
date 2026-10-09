@@ -14,6 +14,7 @@ dependencies = [
     "matplotlib",
     "sodapy",
     "tqdm>=4.70.1",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
