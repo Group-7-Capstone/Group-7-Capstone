@@ -18,7 +18,7 @@ These rules apply to every coding session. Project background is in `README.md`.
 ## Environment
 - Use **uv** only. Run things with `uv sync` and `uv run …`. Change dependencies only with `uv add` / `uv remove`, never with pip, and never edit `uv.lock` by hand.
 - The team is on both macOS and Windows. Use `pathlib` and no absolute paths.
-- **Never commit** data, database files (`*.duckdb`) or secrets. Tokens go in `.env`.
+- **Never commit** data, database files (`*.duckdb`) or secrets. Tokens go in `.env`. The one exception is the team-built camera datasets in `data/camera_data/`, which everyone needs and can't re-download.
 
 ## GitHub
 - One issue per task, grouped into epics. Take one issue at a time and reference it in your branch and PR.
