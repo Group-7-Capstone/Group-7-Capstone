@@ -6,6 +6,8 @@ data/processed/
 *.parquet
 *.gpkg
 *.csv
+# team-built camera datasets are shared through git
+!data/camera_data/*.csv
 
 # Environment and secrets
 .venv/
@@ -22,3 +24,4 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .Rhistory
+data/lion/
