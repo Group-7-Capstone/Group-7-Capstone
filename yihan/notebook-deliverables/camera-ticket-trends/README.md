@@ -1,6 +1,6 @@
 # Per-Camera Ticket Trends Based on Eric's Results
 
-Yihan's descriptive analysis for [issue #4](https://github.com/Group-7-Capstone/Group-7-Capstone/issues/4) follows all 4,610 original normalized-address/camera-type groups from Eric's unchanged inferred activation dates to the last actual ticket observed on or before August 30, 2026. All authored content uses English.
+Descriptive analysis for [issue #4](https://github.com/Group-7-Capstone/Group-7-Capstone/issues/4) follows all 4,610 original normalized-address/camera-type groups from Eric's unchanged inferred activation dates to the last actual ticket observed on or before August 30, 2026. All authored content uses English.
 
 ## Open the results
 
