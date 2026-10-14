@@ -6,6 +6,8 @@ data/processed/
 *.parquet
 *.gpkg
 *.csv
+# team-built camera datasets are shared through git
+!data/camera_data/*.csv
 
 # Environment and secrets
 .venv/
@@ -22,3 +24,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .Rhistory
+data/lion/
+
+# Local camera-trend runtime, caches, and generated deliverables
+.tools/
+yihan/notebook-deliverables/camera-ticket-trends/outputs/
+yihan/notebook-deliverables/camera-ticket-trends/browser/
+yihan/notebook-deliverables/camera-ticket-trends/*.html
+!yihan/notebook-deliverables/camera-ticket-trends/Camera_Ticket_Trends.html
+*.log

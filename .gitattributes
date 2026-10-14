@@ -1,0 +1,4 @@
+# Preserve archived notebook and standalone export checksums across platforms.
+yihan/notebook-deliverables/*/*.ipynb -text whitespace=cr-at-eol
+# Generated JavaScript contains harmless end-of-line spaces; keep the export intact.
+yihan/notebook-deliverables/camera-ticket-trends/Camera_Ticket_Trends.html -text whitespace=-blank-at-eol
