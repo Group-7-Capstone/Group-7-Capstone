@@ -8,9 +8,11 @@ from preprocessing.panel import (
     add_camera_flags,
     add_lag_features,
     add_log1p_features,
+    append_scoring_year,
     count_site_years,
 )
 from preprocessing.sites import (
+    add_site_lonlat,
     assign_sites,
     build_site_points,
     project_coordinates,
@@ -200,3 +202,30 @@ def test_add_log1p_features_only_transforms_lags():
     assert out["log1p_ksi_lag3"].tolist() == [0.0]
     assert abs(out["log1p_crashes_lag3"].iloc[0] - 2.302585) < 1e-6
     assert "log1p_ksi" not in out
+
+
+def test_scoring_year_has_lags_but_no_outcome():
+    config = PanelConfig(first_year=2017, last_year=2019, lag_years=2)
+    crashes = _site_crashes(
+        [(0, "2018-05-01", True, 1, 0), (0, "2019-05-01", True, 1, 0)]
+    )
+    counts = count_site_years(crashes, pd.DataFrame({"site_id": [0]}), config)
+
+    rows = add_lag_features(append_scoring_year(counts, config), config)
+    nxt = rows.set_index("year").loc[2020]
+
+    assert rows["year"].tolist() == [2019, 2020]
+    assert pd.isna(nxt["ksi"])
+    assert nxt["ksi_lag2"] == 2  # 2018 + 2019
+
+
+def test_site_lonlat_round_trips():
+    config = SiteConfig()
+    sites = project_coordinates(
+        pd.DataFrame({"latitude": [40.75], "longitude": [-73.98]}), config
+    )[["x", "y"]]
+
+    out = add_site_lonlat(sites, config)
+
+    assert abs(out["latitude"].iloc[0] - 40.75) < 1e-9
+    assert abs(out["longitude"].iloc[0] + 73.98) < 1e-9

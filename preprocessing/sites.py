@@ -75,6 +75,13 @@ def summarize_sites(site_points: pd.DataFrame) -> pd.DataFrame:
     return sites.reset_index()
 
 
+def add_site_lonlat(sites: pd.DataFrame, config: SiteConfig) -> pd.DataFrame:
+    """Add `longitude`, `latitude` of each site centroid, for mapping."""
+    transformer = Transformer.from_crs(config.crs, "EPSG:4326", always_xy=True)
+    lon, lat = transformer.transform(sites["x"].to_numpy(), sites["y"].to_numpy())
+    return sites.assign(longitude=lon, latitude=lat)
+
+
 def assign_sites(
     crashes: pd.DataFrame, site_points: pd.DataFrame, config: SiteConfig
 ) -> pd.DataFrame:

@@ -15,6 +15,7 @@ from data.reader import read_camera_data
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
 from preprocessing.crashes import load_crashes
 from preprocessing.sites import (
+    add_site_lonlat,
     assign_sites,
     build_site_points,
     project_coordinates,
@@ -71,22 +72,35 @@ def count_site_years(
     return yearly.reindex(grid, fill_value=0).reset_index()
 
 
+def append_scoring_year(counts: pd.DataFrame, config: PanelConfig) -> pd.DataFrame:
+    """Add a row per site for year last_year + 1 with unknown (NA) counts.
+
+    After `add_lag_features` these rows hold the features for forecasting the
+    year after the data ends; their outcome stays NA.
+    """
+    nxt = counts[counts["year"] == config.last_year].assign(year=config.last_year + 1)
+    nxt[COUNTS] = np.nan
+    both = pd.concat([counts, nxt]).sort_values(["site_id", "year"])
+    return both.reset_index(drop=True)
+
+
 def add_lag_features(counts: pd.DataFrame, config: PanelConfig) -> pd.DataFrame:
     """Add `<count>_lag{k}` = sum over the k years before each row's year.
 
-    Keeps only years with a full k-year history, i.e. from first_year + k on.
-    Expects the complete, sorted grid from `count_site_years`.
+    Keeps only years with a full k-year history, i.e. from the first year + k on.
+    Expects a complete grid sorted by site and year, as from `count_site_years`.
     """
     k = config.lag_years
-    n_years = config.last_year - config.first_year + 1
+    first_year = counts["year"].min()
+    n_years = counts["year"].nunique()
     out = counts.copy()
     for col in COUNTS:
-        arr = counts[col].to_numpy().reshape(-1, n_years)
+        arr = counts[col].to_numpy(dtype=float).reshape(-1, n_years)
         cum = np.concatenate([np.zeros((len(arr), 1)), arr.cumsum(axis=1)], axis=1)
         lag = np.full(arr.shape, np.nan)
         lag[:, k:] = cum[:, k:-1] - cum[:, : n_years - k]
         out[f"{col}_lag{k}"] = lag.ravel()
-    return out[out["year"] >= config.first_year + k].reset_index(drop=True)
+    return out[out["year"] >= first_year + k].reset_index(drop=True)
 
 
 def add_log1p_features(panel: pd.DataFrame) -> pd.DataFrame:
@@ -108,7 +122,6 @@ def assign_cameras(
     config: PanelConfig,
 ) -> pd.DataFrame:
     """Add `site_id` to each camera: the nearest site centroid within `camera_radius_ft`."""
-
     cams = project_coordinates(
         cameras.rename(columns={"Latitude": "latitude", "Longitude": "longitude"}),
         site_config,
@@ -148,25 +161,34 @@ def load_panel(
     crash_config: CrashConfig | None = None,
     site_config: SiteConfig | None = None,
     config: PanelConfig | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run all preprocessing steps; return (site x year panel, sites)."""
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Run all preprocessing steps.
+
+    Returns (panel, scoring, sites): `panel` has one row per site and prediction
+    year up to `last_year` with the observed outcome; `scoring` has the features
+    for year last_year + 1, whose outcome is not yet known.
+    """
     site_config = site_config or SiteConfig()
     config = config or PanelConfig()
     crashes = project_coordinates(load_crashes(crash_config), site_config)
     site_points = build_site_points(crashes, site_config)
-    sites = summarize_sites(site_points)
+    sites = add_site_lonlat(summarize_sites(site_points), site_config)
     crashes = assign_sites(crashes, site_points, site_config)
 
-    panel = add_lag_features(count_site_years(crashes, sites, config), config)
-    panel = add_log1p_features(panel)
-    panel = panel.merge(
+    counts = append_scoring_year(count_site_years(crashes, sites, config), config)
+    rows = add_log1p_features(add_lag_features(counts, config))
+    rows = rows.merge(
         site_highway_share(crashes, site_config), on="site_id", how="left"
     )
     cameras = assign_cameras(
         read_camera_data("camera_activation_dates"), sites, site_config, config
     )
-    panel = add_camera_flags(panel, cameras)
+    rows = add_camera_flags(rows, cameras)
+    for col in COUNTS:
+        rows[col] = rows[col].astype("Int64")
+    scoring = rows["year"] > config.last_year
+    panel = rows[~scoring].reset_index(drop=True)
     log.info(
         "load_panel: %d site-years for %d sites", len(panel), panel["site_id"].nunique()
     )
-    return panel, sites
+    return panel, rows[scoring].reset_index(drop=True), sites
