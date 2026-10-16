@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.stats import chi2
 
 from model.base import CountModel
 
@@ -21,7 +22,21 @@ class ValidationConfig:
     top_k: tuple[int, ...] = (50, 100, 250, 500, 1000)
     # Sites with a larger share of highway crashes are dropped from the "non_highway" scope.
     highway_threshold: float = 0.5
-    n_calibration_bins: int = 10
+    # Calibration bins as quantiles of predicted risk. They narrow toward the top,
+    # where watch lists are drawn, so over-predicted top sites can't hide inside a
+    # bin dominated by thousands of moderate-risk sites. The last bin is the top 0.1%.
+    calibration_quantiles: tuple[float, ...] = (
+        0.0,
+        0.5,
+        0.8,
+        0.9,
+        0.95,
+        0.98,
+        0.99,
+        0.995,
+        0.999,
+        1.0,
+    )
 
 
 def expanding_window_splits(
@@ -51,13 +66,49 @@ def top_k_capture(y: pd.Series, pred: pd.Series, k: int) -> float:
     return float(captured / total) if total else np.nan
 
 
-def calibration_table(y: pd.Series, pred: pd.Series, n_bins: int) -> pd.DataFrame:
-    """Mean predicted vs observed count within equal-size bins of predicted risk."""
-    rank = pd.Series(np.asarray(pred)).rank(method="first").to_numpy() - 1
-    bins = (rank * n_bins // len(rank)).astype(int) + 1
-    df = pd.DataFrame({"bin": bins, "pred": np.asarray(pred), "obs": np.asarray(y)})
-    return df.groupby("bin").agg(
-        n=("obs", "size"), mean_pred=("pred", "mean"), mean_obs=("obs", "mean")
+def top_k_totals(y: pd.Series, pred: pd.Series, k: int) -> tuple[float, float]:
+    """(predicted, observed) totals over the `k` highest-`pred` rows.
+
+    Ties at the cutoff are handled as in `top_k_capture`; the predicted total
+    needs no tie rule because tied rows share the same prediction.
+    """
+    predicted = float(np.sort(np.asarray(pred, dtype=float))[::-1][:k].sum())
+    return predicted, top_k_capture(y, pred, k) * float(np.sum(y))
+
+
+def poisson_interval(count, level: float = 0.95) -> tuple[np.ndarray, np.ndarray]:
+    """Exact (Garwood) interval for a Poisson count; works elementwise on arrays."""
+    count = np.asarray(count, dtype=float)
+    alpha = 1 - level
+    low = np.where(count > 0, chi2.ppf(alpha / 2, 2 * count) / 2, 0.0)
+    high = chi2.ppf(1 - alpha / 2, 2 * count + 2) / 2
+    return low, high
+
+
+def calibration_table(
+    y: pd.Series, pred: pd.Series, quantiles: tuple[float, ...]
+) -> pd.DataFrame:
+    """Predicted vs observed counts within bins of predicted-risk quantiles.
+
+    Bin b holds the rows ranked between quantiles[b] and quantiles[b+1] of
+    predicted risk. `obs_low`/`obs_high` are a 95% Poisson interval on the
+    bin's observed mean, so small top bins show how uncertain they are.
+    """
+    pred = np.asarray(pred, dtype=float)
+    pct = (pd.Series(pred).rank(method="first").to_numpy() - 1) / len(pred)
+    bins = np.searchsorted(np.asarray(quantiles[1:-1]), pct, side="right")
+    df = pd.DataFrame({"bin": bins, "pred": pred, "obs": np.asarray(y, dtype=float)})
+    table = df.groupby("bin").agg(
+        n=("obs", "size"), pred_total=("pred", "sum"), obs_total=("obs", "sum")
+    )
+    low, high = poisson_interval(table["obs_total"])
+    return table.assign(
+        q_low=[quantiles[b] for b in table.index],
+        q_high=[quantiles[b + 1] for b in table.index],
+        mean_pred=table["pred_total"] / table["n"],
+        mean_obs=table["obs_total"] / table["n"],
+        obs_low=low / table["n"],
+        obs_high=high / table["n"],
     )
 
 
@@ -109,6 +160,15 @@ def evaluate(
             metrics += [
                 {
                     **row,
+                    "metric": "top_k_pred_to_obs",
+                    "k": k,
+                    "value": np.divide(*top_k_totals(y, p, k)),
+                }
+                for k in config.top_k
+            ]
+            metrics += [
+                {
+                    **row,
                     "metric": "poisson_deviance",
                     "k": None,
                     "value": mean_poisson_deviance(y, p),
@@ -121,7 +181,7 @@ def evaluate(
                 },
             ]
             calibration.append(
-                calibration_table(y, p, config.n_calibration_bins).assign(
+                calibration_table(y, p, config.calibration_quantiles).assign(
                     test_year=year, scope=scope
                 )
             )

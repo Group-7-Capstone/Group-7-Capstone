@@ -10,7 +10,9 @@ from validation.validate import (
     evaluate,
     expanding_window_splits,
     mean_poisson_deviance,
+    poisson_interval,
     top_k_capture,
+    top_k_totals,
 )
 
 
@@ -41,10 +43,37 @@ def test_calibration_table_bins_by_prediction():
     y = pd.Series([0, 0, 1, 1])
     pred = pd.Series([0.1, 0.2, 0.8, 0.9])
 
-    table = calibration_table(y, pred, 2)
+    table = calibration_table(y, pred, (0.0, 0.5, 1.0))
 
     assert table["mean_obs"].tolist() == [0, 1]
     assert np.allclose(table["mean_pred"], [0.15, 0.85])
+    assert table["q_high"].tolist() == [0.5, 1.0]
+    assert (table["obs_low"] <= table["mean_obs"]).all()
+    assert (table["obs_high"] >= table["mean_obs"]).all()
+
+
+def test_calibration_table_uneven_quantiles_isolate_the_top():
+    pred = pd.Series(np.arange(1000, dtype=float))
+    y = pd.Series(np.zeros(1000))
+
+    table = calibration_table(y, pred, (0.0, 0.9, 0.99, 1.0))
+
+    assert table["n"].tolist() == [900, 90, 10]
+    assert table["mean_pred"].iloc[-1] == 994.5
+
+
+def test_top_k_totals_compares_predicted_and_observed():
+    y = pd.Series([1, 0, 0, 2])
+    pred = pd.Series([3.0, 2.0, 1.0, 0.5])
+
+    assert top_k_totals(y, pred, 2) == (5.0, 1.0)
+
+
+def test_poisson_interval_known_values():
+    low, high = poisson_interval([0, 10])
+
+    assert low[0] == 0 and abs(high[0] - 3.689) < 1e-3
+    assert abs(low[1] - 4.795) < 1e-3 and abs(high[1] - 18.390) < 1e-3
 
 
 def _panel():
