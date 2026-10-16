@@ -1,9 +1,13 @@
-"""Group crash locations into sites with DBSCAN and assign crashes to them.
+"""Group crash locations into compact sites and assign crashes to them.
 
-Sites are built from the unique coordinates of crashes before `SiteConfig.build_end`.
-Every crash (any year) is then assigned to the site of the nearest training
-coordinate within `eps_ft`; crashes farther than that stay unassigned (NA).
-For training crashes this reproduces the DBSCAN labels exactly.
+Site centers are chosen from the unique coordinates of crashes before
+`SiteConfig.build_end` by peak-radius clustering: the busiest unclaimed point
+becomes a center and claims every point within `radius_ft`, repeated until all
+points are claimed. Unlike DBSCAN this cannot chain locations along a corridor,
+so no site extends more than `radius_ft` from its center.
+
+Every crash (any year) is then assigned to its nearest center within
+`radius_ft`; crashes farther than that stay unassigned (NA).
 """
 
 import logging
@@ -12,7 +16,6 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 from scipy.spatial import cKDTree
-from sklearn.cluster import DBSCAN
 
 from preprocessing.config import SiteConfig
 
@@ -29,22 +32,39 @@ def project_coordinates(crashes: pd.DataFrame, config: SiteConfig) -> pd.DataFra
 
 
 def build_site_points(crashes: pd.DataFrame, config: SiteConfig) -> pd.DataFrame:
-    """Cluster unique crash coordinates before `build_end` into sites.
+    """Pick site centers among unique crash coordinates before `build_end`.
 
-    Returns one row per unique coordinate: `x`, `y`, `n_crashes`, `site_id`.
+    Returns one row per unique coordinate: `x`, `y`, `n_crashes`, `is_center` and
+    `site_id` (the nearest center, which is always within `radius_ft`).
     """
     train = crashes[crashes["crash_date"] < pd.Timestamp(config.build_end)]
-    points = train.groupby(["x", "y"]).size().rename("n_crashes").reset_index()
-    labels = DBSCAN(eps=config.eps_ft, min_samples=1).fit_predict(
-        points[["x", "y"]].to_numpy()
+    points = (
+        train.groupby(["x", "y"])
+        .size()
+        .rename("n_crashes")
+        .reset_index()
+        .sort_values(["n_crashes", "x", "y"], ascending=[False, True, True])
+        .reset_index(drop=True)
     )
-    points["site_id"] = labels
+    xy = points[["x", "y"]].to_numpy()
+    tree = cKDTree(xy)
+    claimed = np.zeros(len(points), dtype=bool)
+    is_center = np.zeros(len(points), dtype=bool)
+    for i in range(len(points)):  # busiest first
+        if not claimed[i]:
+            is_center[i] = True
+            claimed[tree.query_ball_point(xy[i], config.radius_ft)] = True
+    points["is_center"] = is_center
+
+    centers = np.flatnonzero(is_center)
+    _, nearest = cKDTree(xy[centers]).query(xy)
+    points["site_id"] = nearest
     log.info(
         "build_site_points: %d crashes before %s at %d unique points -> %d sites",
         len(train),
         config.build_end,
         len(points),
-        points["site_id"].nunique(),
+        len(centers),
     )
     return points
 
@@ -52,8 +72,7 @@ def build_site_points(crashes: pd.DataFrame, config: SiteConfig) -> pd.DataFrame
 def summarize_sites(site_points: pd.DataFrame) -> pd.DataFrame:
     """One row per site: crash-weighted centroid, crash count and span.
 
-    `span_ft` is the largest distance from the centroid to a member point; a large
-    span means DBSCAN chained many locations (e.g. along a corridor) into one site.
+    `span_ft` is the largest distance from the centroid to a member point.
     """
     w = site_points["n_crashes"]
     sums = (
@@ -85,14 +104,14 @@ def add_site_lonlat(sites: pd.DataFrame, config: SiteConfig) -> pd.DataFrame:
 def assign_sites(
     crashes: pd.DataFrame, site_points: pd.DataFrame, config: SiteConfig
 ) -> pd.DataFrame:
-    """Add `site_id` to each crash: the site of the nearest training point within `eps_ft`."""
-    tree = cKDTree(site_points[["x", "y"]].to_numpy())
-    dist, idx = tree.query(
-        crashes[["x", "y"]].to_numpy(), distance_upper_bound=config.eps_ft
+    """Add `site_id` to each crash: its nearest site center within `radius_ft`."""
+    centers = site_points[site_points["is_center"]]
+    dist, idx = cKDTree(centers[["x", "y"]].to_numpy()).query(
+        crashes[["x", "y"]].to_numpy(), distance_upper_bound=config.radius_ft
     )
     matched = np.isfinite(dist)
     site_id = pd.Series(pd.NA, index=crashes.index, dtype="Int64")
-    site_id[matched] = site_points["site_id"].to_numpy()[idx[matched]]
+    site_id[matched] = centers["site_id"].to_numpy()[idx[matched]]
 
     after = crashes["crash_date"] >= pd.Timestamp(config.build_end)
     log.info(

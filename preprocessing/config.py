@@ -45,8 +45,9 @@ class CrashConfig:
 class SiteConfig:
     # Projected CRS used for distances (NY State Plane Long Island, feet).
     crs: str = "EPSG:2263"
-    # DBSCAN radius in feet; with min_samples=1 every crash belongs to a site.
-    eps_ft: float = 80.0
+    # Peak-radius clustering: a site is every crash location within this many
+    # feet of its center (the busiest crash location not already claimed).
+    radius_ft: float = 100.0
     # Sites are built only from crashes before this date, so held-out years
     # never define which sites exist. Test periods must start on or after it.
     build_end: str = "2024-01-01"

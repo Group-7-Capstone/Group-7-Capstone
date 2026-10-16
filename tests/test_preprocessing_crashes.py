@@ -96,7 +96,7 @@ def _located(feet_offsets, dates):
 
 
 def test_sites_cluster_nearby_points_and_freeze_before_build_end():
-    config = SiteConfig(eps_ft=80, build_end="2024-01-01")
+    config = SiteConfig(radius_ft=80, build_end="2024-01-01")
     crashes = _located(
         [0, 50, 1000, 0, 2000],
         ["2018-01-01", "2019-01-01", "2020-01-01", "2024-06-01", "2024-06-01"],
@@ -229,3 +229,17 @@ def test_site_lonlat_round_trips():
 
     assert abs(out["latitude"].iloc[0] - 40.75) < 1e-9
     assert abs(out["longitude"].iloc[0] + 73.98) < 1e-9
+
+
+def test_sites_do_not_chain_along_a_corridor():
+    # Points every 60 ft: DBSCAN with eps 80 would chain all of them into one site.
+    config = SiteConfig(radius_ft=80, build_end="2024-01-01")
+    crashes = _located([0, 0, 0, 60, 120, 180, 240, 240], ["2020-01-01"] * 8)
+
+    points = build_site_points(crashes, config)
+    sites = summarize_sites(points)
+    assigned = assign_sites(crashes, points, config)
+
+    assert len(sites) == 3  # centers at 0 (busiest), 240, then 120
+    assert sites["span_ft"].max() <= 80
+    assert assigned["site_id"].notna().all()
