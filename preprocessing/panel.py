@@ -89,6 +89,12 @@ def add_lag_features(counts: pd.DataFrame, config: PanelConfig) -> pd.DataFrame:
     return out[out["year"] >= config.first_year + k].reset_index(drop=True)
 
 
+def add_log1p_features(panel: pd.DataFrame) -> pd.DataFrame:
+    """Add `log1p_<col>` for every lagged count, the form the count models use."""
+    lags = [c for c in panel if "_lag" in c and not c.startswith("log1p_")]
+    return panel.assign(**{f"log1p_{c}": np.log1p(panel[c]) for c in lags})
+
+
 def site_highway_share(crashes: pd.DataFrame, site_config: SiteConfig) -> pd.Series:
     """Share of each site's crashes before `build_end` that are on a highway."""
     train = crashes[crashes["crash_date"] < pd.Timestamp(site_config.build_end)]
@@ -152,6 +158,7 @@ def load_panel(
     crashes = assign_sites(crashes, site_points, site_config)
 
     panel = add_lag_features(count_site_years(crashes, sites, config), config)
+    panel = add_log1p_features(panel)
     panel = panel.merge(
         site_highway_share(crashes, site_config), on="site_id", how="left"
     )

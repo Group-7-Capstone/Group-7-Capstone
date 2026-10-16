@@ -4,7 +4,12 @@ import pandas as pd
 
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
 from preprocessing.crashes import clean_crashes, drop_ungeocoded, flag_highway, flag_ksi
-from preprocessing.panel import add_camera_flags, add_lag_features, count_site_years
+from preprocessing.panel import (
+    add_camera_flags,
+    add_lag_features,
+    add_log1p_features,
+    count_site_years,
+)
 from preprocessing.sites import (
     assign_sites,
     build_site_points,
@@ -185,3 +190,13 @@ def test_flag_highway_matches_whole_words():
     out = flag_highway(crashes, CONFIG)
 
     assert out["highway"].tolist() == [True, True, True, False, False]
+
+
+def test_add_log1p_features_only_transforms_lags():
+    panel = pd.DataFrame({"ksi": [3], "ksi_lag3": [0.0], "crashes_lag3": [9.0]})
+
+    out = add_log1p_features(panel)
+
+    assert out["log1p_ksi_lag3"].tolist() == [0.0]
+    assert abs(out["log1p_crashes_lag3"].iloc[0] - 2.302585) < 1e-6
+    assert "log1p_ksi" not in out
