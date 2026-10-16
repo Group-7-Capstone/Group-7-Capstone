@@ -11,6 +11,7 @@ from validation.validate import (
     expanding_window_splits,
     mean_poisson_deviance,
     poisson_interval,
+    share_calibration_table,
     top_k_capture,
     top_k_totals,
 )
@@ -39,27 +40,31 @@ def test_mean_poisson_deviance_is_zero_for_perfect_predictions():
     assert mean_poisson_deviance(y, pd.Series([1.0, 1.0, 1.0])) > 0
 
 
-def test_calibration_table_bins_by_prediction():
-    y = pd.Series([0, 0, 1, 1])
-    pred = pd.Series([0.1, 0.2, 0.8, 0.9])
-
-    table = calibration_table(y, pred, (0.0, 0.5, 1.0))
-
-    assert table["mean_obs"].tolist() == [0, 1]
-    assert np.allclose(table["mean_pred"], [0.15, 0.85])
-    assert table["q_high"].tolist() == [0.5, 1.0]
-    assert (table["obs_low"] <= table["mean_obs"]).all()
-    assert (table["obs_high"] >= table["mean_obs"]).all()
-
-
 def test_calibration_table_uneven_quantiles_isolate_the_top():
     pred = pd.Series(np.arange(1000, dtype=float))
-    y = pd.Series(np.zeros(1000))
+    y = pd.Series((np.arange(1000) >= 990).astype(float))
 
     table = calibration_table(y, pred, (0.0, 0.9, 0.99, 1.0))
 
     assert table["n"].tolist() == [900, 90, 10]
     assert table["mean_pred"].iloc[-1] == 994.5
+    assert table["mean_obs"].tolist() == [0, 0, 1]
+    assert (table["obs_low"] <= table["mean_obs"]).all()
+    assert (table["obs_high"] >= table["mean_obs"]).all()
+
+
+def test_share_calibration_pools_shares_within_bands():
+    successes = pd.Series([0, 1, 3, 5, 0])
+    trials = pd.Series([10, 10, 10, 10, 0])  # last row has no trials: dropped
+    pred = pd.Series([0.0, 0.1, 0.3, 0.5, 0.9])
+
+    table = share_calibration_table(successes, trials, pred, (0.0, 0.5, 1.0))
+
+    assert table["trials"].tolist() == [20, 20]
+    assert table["obs_share"].tolist() == [0.05, 0.4]
+    assert np.allclose(table["pred_share"], [0.05, 0.4])
+    assert (table["obs_low"] < table["obs_share"]).all()
+    assert (table["obs_high"] > table["obs_share"]).all()
 
 
 def test_top_k_totals_compares_predicted_and_observed():

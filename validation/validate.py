@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy.stats import chi2
+from scipy.stats import beta, chi2
 
 from model.base import CountModel
 
@@ -109,6 +109,42 @@ def calibration_table(
         mean_obs=table["obs_total"] / table["n"],
         obs_low=low / table["n"],
         obs_high=high / table["n"],
+    )
+
+
+def share_calibration_table(
+    successes: pd.Series,
+    trials: pd.Series,
+    pred_share: pd.Series,
+    quantiles: tuple[float, ...],
+) -> pd.DataFrame:
+    """Predicted vs observed share (e.g. KSI crashes / all crashes) by band of predicted share.
+
+    Rows with no trials are dropped. Both shares are pooled over the band
+    (total successes / total trials), and `obs_low`/`obs_high` are a 95%
+    Clopper-Pearson interval on the observed share.
+    """
+    has = np.asarray(trials) > 0
+    s = np.asarray(successes, dtype=float)[has]
+    n = np.asarray(trials, dtype=float)[has]
+    p = np.asarray(pred_share, dtype=float)[has]
+    pct = (pd.Series(p).rank(method="first").to_numpy() - 1) / len(p)
+    bins = np.searchsorted(np.asarray(quantiles[1:-1]), pct, side="right")
+    df = pd.DataFrame({"bin": bins, "succ": s, "trials": n, "pred_succ": p * n})
+    t = df.groupby("bin").agg(
+        n=("trials", "size"),
+        trials=("trials", "sum"),
+        successes=("succ", "sum"),
+        pred_successes=("pred_succ", "sum"),
+    )
+    k, m = t["successes"], t["trials"]
+    return t.assign(
+        q_low=[quantiles[b] for b in t.index],
+        q_high=[quantiles[b + 1] for b in t.index],
+        pred_share=t["pred_successes"] / m,
+        obs_share=k / m,
+        obs_low=np.where(k > 0, beta.ppf(0.025, k, m - k + 1), 0.0),
+        obs_high=np.where(k < m, beta.ppf(0.975, k + 1, m - k), 1.0),
     )
 
 

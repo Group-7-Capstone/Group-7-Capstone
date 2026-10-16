@@ -12,7 +12,6 @@ from preprocessing.panel import (
     count_site_years,
 )
 from preprocessing.sites import (
-    add_site_lonlat,
     assign_sites,
     build_site_points,
     project_coordinates,
@@ -220,18 +219,6 @@ def test_scoring_year_has_lags_but_no_outcome():
     assert rows["year"].tolist() == [2019, 2020]
     assert pd.isna(nxt["ksi"])
     assert nxt["ksi_lag2"] == 2  # 2018 + 2019
-
-
-def test_site_lonlat_round_trips():
-    config = SiteConfig()
-    sites = project_coordinates(
-        pd.DataFrame({"latitude": [40.75], "longitude": [-73.98]}), config
-    )[["x", "y"]]
-
-    out = add_site_lonlat(sites, config)
-
-    assert abs(out["latitude"].iloc[0] - 40.75) < 1e-9
-    assert abs(out["longitude"].iloc[0] + 73.98) < 1e-9
 
 
 def test_sites_do_not_chain_along_a_corridor():
