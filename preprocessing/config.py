@@ -33,6 +33,13 @@ class CrashConfig:
         "Apparent Death",
     )
 
+    # Crashes whose on_street_name matches this regex are flagged as highway
+    # (limited-access roads where the city can't place cameras). Crude: it also
+    # matches surface "parkways" such as Ocean Parkway.
+    highway_pattern: str = (
+        r"\b(?:EXPRESSWAY|EXPWY|EXPY|PARKWAY|PKWY|THRUWAY|HIGHWAY|HWY|BRIDGE|TUNNEL)\b"
+    )
+
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -43,3 +50,14 @@ class SiteConfig:
     # Sites are built only from crashes before this date, so held-out years
     # never define which sites exist. Test periods must start on or after it.
     build_end: str = "2024-01-01"
+
+
+@dataclass(frozen=True)
+class PanelConfig:
+    # Site x year panel covers these calendar years; the last must be complete.
+    first_year: int = 2017
+    last_year: int = 2025
+    # Features sum the `lag_years` years before each prediction year.
+    lag_years: int = 3
+    # A camera belongs to the nearest site centroid within this many feet.
+    camera_radius_ft: float = 150.0

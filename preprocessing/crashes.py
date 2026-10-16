@@ -23,7 +23,14 @@ COUNT_COLUMNS = [
     "number_of_motorist_injured",
     "number_of_motorist_killed",
 ]
-CRASH_COLUMNS = ["collision_id", "crash_date", "latitude", "longitude", *COUNT_COLUMNS]
+CRASH_COLUMNS = [
+    "collision_id",
+    "crash_date",
+    "latitude",
+    "longitude",
+    "on_street_name",
+    *COUNT_COLUMNS,
+]
 PERSON_COLUMNS = ["collision_id", "person_injury", "complaint", "emotional_status"]
 
 
@@ -42,15 +49,17 @@ def clean_crashes(raw: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
 
     keep = df["crash_date"] >= pd.Timestamp(config.start_date)
-    log.info("clean_crashes: dropped %d crashes before %s", (~keep).sum(), config.start_date)
+    log.info(
+        "clean_crashes: dropped %d crashes before %s", (~keep).sum(), config.start_date
+    )
     return df[keep].reset_index(drop=True)
 
 
 def drop_ungeocoded(crashes: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
     """Drop crashes with missing coordinates or coordinates outside NYC."""
-    valid = crashes["latitude"].between(*config.lat_bounds) & crashes["longitude"].between(
-        *config.lon_bounds
-    )
+    valid = crashes["latitude"].between(*config.lat_bounds) & crashes[
+        "longitude"
+    ].between(*config.lon_bounds)
     log.info(
         "drop_ungeocoded: dropped %d of %d crashes (%.1f%%) with missing or out-of-NYC coordinates",
         (~valid).sum(),
@@ -60,7 +69,9 @@ def drop_ungeocoded(crashes: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
     return crashes[valid].reset_index(drop=True)
 
 
-def flag_ksi(crashes: pd.DataFrame, persons: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
+def flag_ksi(
+    crashes: pd.DataFrame, persons: pd.DataFrame, config: CrashConfig
+) -> pd.DataFrame:
     """Add `n_killed`, `n_severe_injured` and boolean `ksi` to each crash.
 
     `n_killed` is the larger of the crash table's count and the person table's
@@ -79,7 +90,8 @@ def flag_ksi(crashes: pd.DataFrame, persons: pd.DataFrame, config: CrashConfig) 
 
     out = crashes.merge(per_crash, left_on="collision_id", right_index=True, how="left")
     out["n_killed"] = np.fmax(
-        out["number_of_persons_killed"].astype("float").fillna(0), out["killed"].fillna(0)
+        out["number_of_persons_killed"].astype("float").fillna(0),
+        out["killed"].fillna(0),
     ).astype("int64")
     out["n_severe_injured"] = out["severe"].fillna(0).astype("int64")
     out["ksi"] = (out["n_killed"] > 0) | (out["n_severe_injured"] > 0)
@@ -94,8 +106,23 @@ def flag_ksi(crashes: pd.DataFrame, persons: pd.DataFrame, config: CrashConfig) 
     return out
 
 
-def load_crashes(config: CrashConfig = CrashConfig()) -> pd.DataFrame:
-    """Read raw crashes and persons, then clean, drop ungeocoded and flag KSI."""
+def flag_highway(crashes: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
+    """Add boolean `highway` from `on_street_name`; a missing street name is False."""
+    highway = (
+        crashes["on_street_name"]
+        .str.upper()
+        .str.contains(config.highway_pattern, na=False)
+    )
+    log.info(
+        "flag_highway: %d of %d crashes flagged as highway", highway.sum(), len(crashes)
+    )
+    return crashes.assign(highway=highway)
+
+
+def load_crashes(config: CrashConfig | None = None) -> pd.DataFrame:
+    """Read raw crashes and persons, then clean, drop ungeocoded and flag highway and KSI."""
+    config = config or CrashConfig()
     crashes = clean_crashes(read_table("crashes", CRASH_COLUMNS), config)
     crashes = drop_ungeocoded(crashes, config)
+    crashes = flag_highway(crashes, config)
     return flag_ksi(crashes, read_table("persons", PERSON_COLUMNS), config)

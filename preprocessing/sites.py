@@ -22,7 +22,9 @@ log = logging.getLogger(__name__)
 def project_coordinates(crashes: pd.DataFrame, config: SiteConfig) -> pd.DataFrame:
     """Add projected `x`, `y` (feet) from `longitude`, `latitude`."""
     transformer = Transformer.from_crs("EPSG:4326", config.crs, always_xy=True)
-    x, y = transformer.transform(crashes["longitude"].to_numpy(), crashes["latitude"].to_numpy())
+    x, y = transformer.transform(
+        crashes["longitude"].to_numpy(), crashes["latitude"].to_numpy()
+    )
     return crashes.assign(x=x, y=y)
 
 
@@ -33,7 +35,9 @@ def build_site_points(crashes: pd.DataFrame, config: SiteConfig) -> pd.DataFrame
     """
     train = crashes[crashes["crash_date"] < pd.Timestamp(config.build_end)]
     points = train.groupby(["x", "y"]).size().rename("n_crashes").reset_index()
-    labels = DBSCAN(eps=config.eps_ft, min_samples=1).fit_predict(points[["x", "y"]].to_numpy())
+    labels = DBSCAN(eps=config.eps_ft, min_samples=1).fit_predict(
+        points[["x", "y"]].to_numpy()
+    )
     points["site_id"] = labels
     log.info(
         "build_site_points: %d crashes before %s at %d unique points -> %d sites",
@@ -76,7 +80,9 @@ def assign_sites(
 ) -> pd.DataFrame:
     """Add `site_id` to each crash: the site of the nearest training point within `eps_ft`."""
     tree = cKDTree(site_points[["x", "y"]].to_numpy())
-    dist, idx = tree.query(crashes[["x", "y"]].to_numpy(), distance_upper_bound=config.eps_ft)
+    dist, idx = tree.query(
+        crashes[["x", "y"]].to_numpy(), distance_upper_bound=config.eps_ft
+    )
     matched = np.isfinite(dist)
     site_id = pd.Series(pd.NA, index=crashes.index, dtype="Int64")
     site_id[matched] = site_points["site_id"].to_numpy()[idx[matched]]
