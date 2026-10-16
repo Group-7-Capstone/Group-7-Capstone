@@ -24,7 +24,11 @@ from preprocessing.sites import (
 
 log = logging.getLogger(__name__)
 
-COUNTS = ["ksi", "fatal", "injury", "crashes", "ped_injured", "cyc_injured"]
+RAW_COUNTS = ["ksi", "fatal", "injury", "crashes", "ped_injured", "cyc_injured"]
+# Mutually exclusive severity tiers: each crash counts in exactly one, unlike the
+# nested ksi/injury/crashes counts (fatal is already its own tier).
+SEVERITY_TIERS = ["pdo", "injury_nonsevere", "ksi_nonfatal"]
+COUNTS = RAW_COUNTS + SEVERITY_TIERS
 CAMERA_TYPES = {"Red Light": "rlc_active", "Speed": "speed_active"}
 
 
@@ -36,6 +40,8 @@ def count_site_years(
     `injury` counts crashes with any injury or death; `ped_injured`/`cyc_injured`
     count pedestrians/cyclists injured or killed. Missing person counts are
     treated as zero (logged), since they cannot be attributed to a road user.
+    The severity tiers split `crashes` into property-damage-only (`pdo`), injury
+    but not KSI (`injury_nonsevere`), KSI without a death (`ksi_nonfatal`) and `fatal`.
     """
     c = crashes[crashes["site_id"].notna()]
     c = c[c["crash_date"].dt.year.between(config.first_year, config.last_year)]
@@ -62,14 +68,19 @@ def count_site_years(
                 + n("number_of_cyclist_killed"),
             }
         )
-        .groupby(["site_id", "year"])[COUNTS]
+        .groupby(["site_id", "year"])[RAW_COUNTS]
         .sum()
     )
     grid = pd.MultiIndex.from_product(
         [sorted(sites["site_id"]), range(config.first_year, config.last_year + 1)],
         names=["site_id", "year"],
     )
-    return yearly.reindex(grid, fill_value=0).reset_index()
+    counts = yearly.reindex(grid, fill_value=0).reset_index()
+    return counts.assign(
+        pdo=counts["crashes"] - counts["injury"],
+        injury_nonsevere=counts["injury"] - counts["ksi"],
+        ksi_nonfatal=counts["ksi"] - counts["fatal"],
+    )
 
 
 def append_scoring_year(counts: pd.DataFrame, config: PanelConfig) -> pd.DataFrame:

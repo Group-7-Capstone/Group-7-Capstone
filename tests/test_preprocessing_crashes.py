@@ -157,6 +157,9 @@ def test_panel_lags_sum_prior_years_only():
     assert panel.loc[(0, 2021), "crashes_lag2"] == 2
     assert panel.loc[(0, 2019), "ped_injured_lag2"] == 1
     assert panel.loc[(1, 2021)].filter(like="_lag2").sum() == 0
+    tiers = ["pdo", "injury_nonsevere", "ksi_nonfatal", "fatal"]
+    assert (counts[tiers].sum(axis=1) == counts["crashes"]).all()
+    assert counts.set_index("year").loc[2018, "pdo"].tolist() == [1, 0]
 
 
 def test_camera_flags_require_activation_before_the_year():
