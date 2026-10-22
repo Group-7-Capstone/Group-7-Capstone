@@ -10,6 +10,7 @@ from preprocessing.panel import (
     add_log1p_features,
     append_scoring_year,
     count_site_years,
+    drop_mixed_definition_years,
 )
 from preprocessing.sites import (
     assign_sites,
@@ -233,3 +234,12 @@ def test_sites_do_not_chain_along_a_corridor():
     assert len(sites) == 3  # centers at 0 (busiest), 240, then 120
     assert sites["span_ft"].max() <= 80
     assert assigned["site_id"].notna().all()
+
+
+def test_drop_mixed_definition_years_keeps_windows_after_the_change():
+    config = PanelConfig(lag_years=3, ksi_definition_start=2019)
+    panel = pd.DataFrame({"year": [2020, 2021, 2022, 2025]})
+
+    out = drop_mixed_definition_years(panel, config)
+
+    assert out["year"].tolist() == [2022, 2025]

@@ -114,6 +114,19 @@ def add_lag_features(counts: pd.DataFrame, config: PanelConfig) -> pd.DataFrame:
     return out[out["year"] >= first_year + k].reset_index(drop=True)
 
 
+def drop_mixed_definition_years(
+    panel: pd.DataFrame, config: PanelConfig
+) -> pd.DataFrame:
+    """Keep prediction years whose lag window starts on or after `ksi_definition_start`."""
+    keep = panel["year"] - config.lag_years >= config.ksi_definition_start
+    log.info(
+        "drop_mixed_definition_years: dropped %d site-years before %d",
+        (~keep).sum(),
+        config.ksi_definition_start + config.lag_years,
+    )
+    return panel[keep].reset_index(drop=True)
+
+
 def add_log1p_features(panel: pd.DataFrame) -> pd.DataFrame:
     """Add `log1p_<col>` for every lagged count, the form the count models use."""
     lags = [c for c in panel if "_lag" in c and not c.startswith("log1p_")]
@@ -187,7 +200,8 @@ def load_panel(
     crashes = assign_sites(crashes, site_points, site_config)
 
     counts = append_scoring_year(count_site_years(crashes, sites, config), config)
-    rows = add_log1p_features(add_lag_features(counts, config))
+    rows = add_lag_features(counts, config)
+    rows = add_log1p_features(drop_mixed_definition_years(rows, config))
     rows = rows.merge(
         site_highway_share(crashes, site_config), on="site_id", how="left"
     )

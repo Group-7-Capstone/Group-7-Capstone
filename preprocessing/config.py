@@ -60,5 +60,10 @@ class PanelConfig:
     last_year: int = 2025
     # Features sum the `lag_years` years before each prediction year.
     lag_years: int = 3
+    # New York changed its serious-injury coding in 2019 (MMUCC 4th edition): new
+    # complaint categories appear and the KSI share of injury crashes jumps. Only
+    # prediction years whose whole lag window starts on or after this year are kept,
+    # so every KSI-based feature uses one definition.
+    ksi_definition_start: int = 2019
     # A camera belongs to the nearest site centroid within this many feet.
     camera_radius_ft: float = 150.0
