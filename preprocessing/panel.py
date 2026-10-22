@@ -15,6 +15,7 @@ from data.reader import read_camera_data
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
 from preprocessing.crashes import load_crashes
 from preprocessing.sites import (
+    add_site_borough,
     add_site_lonlat,
     assign_sites,
     build_site_points,
@@ -198,6 +199,7 @@ def load_panel(
     site_points = build_site_points(crashes, site_config)
     sites = add_site_lonlat(summarize_sites(site_points), site_config)
     crashes = assign_sites(crashes, site_points, site_config)
+    sites = add_site_borough(sites, crashes, site_config)
 
     counts = append_scoring_year(count_site_years(crashes, sites, config), config)
     rows = add_lag_features(counts, config)

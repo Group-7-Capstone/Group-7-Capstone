@@ -29,6 +29,7 @@ CRASH_COLUMNS = [
     "latitude",
     "longitude",
     "on_street_name",
+    "borough",
     *COUNT_COLUMNS,
 ]
 PERSON_COLUMNS = ["collision_id", "person_injury", "complaint", "emotional_status"]

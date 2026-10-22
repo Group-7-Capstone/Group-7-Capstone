@@ -13,6 +13,7 @@ from preprocessing.panel import (
     drop_mixed_definition_years,
 )
 from preprocessing.sites import (
+    add_site_borough,
     assign_sites,
     build_site_points,
     project_coordinates,
@@ -243,3 +244,28 @@ def test_drop_mixed_definition_years_keeps_windows_after_the_change():
     out = drop_mixed_definition_years(panel, config)
 
     assert out["year"].tolist() == [2022, 2025]
+
+
+def test_site_borough_is_most_common_before_build_end():
+    crashes = pd.DataFrame(
+        {
+            "site_id": pd.array([0, 0, 0, 0, 1, pd.NA], dtype="Int64"),
+            "crash_date": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2021-01-01",
+                    "2022-01-01",
+                    "2024-06-01",
+                    "2020-01-01",
+                    "2020-01-01",
+                ]
+            ),
+            "borough": ["QUEENS", "QUEENS", None, "BROOKLYN", None, "BRONX"],
+        }
+    )
+    sites = pd.DataFrame({"site_id": [0, 1]})
+
+    out = add_site_borough(sites, crashes, SiteConfig(build_end="2024-01-01"))
+
+    assert out["borough"].iloc[0] == "QUEENS"
+    assert pd.isna(out["borough"].iloc[1])

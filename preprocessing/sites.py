@@ -101,6 +101,20 @@ def add_site_lonlat(sites: pd.DataFrame, config: SiteConfig) -> pd.DataFrame:
     return sites.assign(longitude=lon, latitude=lat)
 
 
+def add_site_borough(
+    sites: pd.DataFrame, crashes: pd.DataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """Add `borough`: the borough most often reported by the site's crashes before
+    `build_end`. NA if none of them report one (the field is often blank)."""
+    train = crashes[
+        (crashes["crash_date"] < pd.Timestamp(config.build_end))
+        & crashes["site_id"].notna()
+        & crashes["borough"].notna()
+    ]
+    borough = train.groupby("site_id")["borough"].agg(lambda b: b.mode().iloc[0])
+    return sites.assign(borough=sites["site_id"].map(borough))
+
+
 def assign_sites(
     crashes: pd.DataFrame, site_points: pd.DataFrame, config: SiteConfig
 ) -> pd.DataFrame:
