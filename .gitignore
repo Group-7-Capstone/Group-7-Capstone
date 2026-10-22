@@ -25,3 +25,6 @@ __pycache__/
 Thumbs.db
 .Rhistory
 data/lion/
+
+# Generated experiment outputs (risk tables, local report site)
+experiments/outputs/
