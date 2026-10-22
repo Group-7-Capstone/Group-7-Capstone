@@ -9,9 +9,7 @@ from validation.validate import (
     calibration_table,
     evaluate,
     expanding_window_splits,
-    mean_poisson_deviance,
     poisson_interval,
-    share_calibration_table,
     top_k_capture,
     top_k_totals,
 )
@@ -33,13 +31,6 @@ def test_top_k_capture_splits_ties_at_the_cutoff():
     assert top_k_capture(y, pred, 1) == 0.375  # half of the tied pair's 6, out of 8
 
 
-def test_mean_poisson_deviance_is_zero_for_perfect_predictions():
-    y = pd.Series([0, 1, 3])
-
-    assert mean_poisson_deviance(y, y.astype(float)) < 1e-5
-    assert mean_poisson_deviance(y, pd.Series([1.0, 1.0, 1.0])) > 0
-
-
 def test_calibration_table_uneven_quantiles_isolate_the_top():
     pred = pd.Series(np.arange(1000, dtype=float))
     y = pd.Series((np.arange(1000) >= 990).astype(float))
@@ -51,20 +42,6 @@ def test_calibration_table_uneven_quantiles_isolate_the_top():
     assert table["mean_obs"].tolist() == [0, 0, 1]
     assert (table["obs_low"] <= table["mean_obs"]).all()
     assert (table["obs_high"] >= table["mean_obs"]).all()
-
-
-def test_share_calibration_pools_shares_within_bands():
-    successes = pd.Series([0, 1, 3, 5, 0])
-    trials = pd.Series([10, 10, 10, 10, 0])  # last row has no trials: dropped
-    pred = pd.Series([0.0, 0.1, 0.3, 0.5, 0.9])
-
-    table = share_calibration_table(successes, trials, pred, (0.0, 0.5, 1.0))
-
-    assert table["trials"].tolist() == [20, 20]
-    assert table["obs_share"].tolist() == [0.05, 0.4]
-    assert np.allclose(table["pred_share"], [0.05, 0.4])
-    assert (table["obs_low"] < table["obs_share"]).all()
-    assert (table["obs_high"] > table["obs_share"]).all()
 
 
 def test_top_k_totals_compares_predicted_and_observed():
@@ -88,7 +65,6 @@ def _panel():
             "year": [2023, 2023, 2024, 2024, 2025, 2025],
             "ksi": [1, 0, 2, 0, 1, 1],
             "ksi_lag3": [3, 0, 3, 0, 4, 0],
-            "highway_share": [0.0, 0.9, 0.0, 0.9, 0.0, 0.9],
         }
     )
 
@@ -99,18 +75,13 @@ def test_expanding_window_never_trains_on_the_test_year():
         assert (test["year"] == year).all()
 
 
-def test_evaluate_reports_each_year_and_scope():
+def test_evaluate_reports_each_test_year():
     config = ValidationConfig(test_years=(2024, 2025), top_k=(1,))
 
-    metrics, calibration, predictions = evaluate(
+    capture, calibration, predictions = evaluate(
         lambda: HistoryRanker("ksi_lag3", 3), _panel(), config
     )
 
-    capture = metrics[metrics["metric"] == "top_k_capture"].set_index(
-        ["test_year", "scope"]
-    )
-    assert capture.loc[(2024, "all"), "value"] == 1.0
-    assert capture.loc[(2025, "all"), "value"] == 0.5
-    assert capture.loc[(2025, "non_highway"), "value"] == 1.0
+    assert capture.set_index("test_year")["capture"].to_dict() == {2024: 1.0, 2025: 0.5}
+    assert set(calibration["test_year"]) == {2024, 2025}
     assert len(predictions) == 4
-    assert set(calibration["scope"]) == {"all", "non_highway"}

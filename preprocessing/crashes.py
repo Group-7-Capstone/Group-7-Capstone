@@ -28,7 +28,6 @@ CRASH_COLUMNS = [
     "crash_date",
     "latitude",
     "longitude",
-    "on_street_name",
     "borough",
     *COUNT_COLUMNS,
 ]
@@ -107,23 +106,9 @@ def flag_ksi(
     return out
 
 
-def flag_highway(crashes: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
-    """Add boolean `highway` from `on_street_name`; a missing street name is False."""
-    highway = (
-        crashes["on_street_name"]
-        .str.upper()
-        .str.contains(config.highway_pattern, na=False)
-    )
-    log.info(
-        "flag_highway: %d of %d crashes flagged as highway", highway.sum(), len(crashes)
-    )
-    return crashes.assign(highway=highway)
-
-
 def load_crashes(config: CrashConfig | None = None) -> pd.DataFrame:
-    """Read raw crashes and persons, then clean, drop ungeocoded and flag highway and KSI."""
+    """Read raw crashes and persons, then clean, drop ungeocoded and flag KSI."""
     config = config or CrashConfig()
     crashes = clean_crashes(read_table("crashes", CRASH_COLUMNS), config)
     crashes = drop_ungeocoded(crashes, config)
-    crashes = flag_highway(crashes, config)
     return flag_ksi(crashes, read_table("persons", PERSON_COLUMNS), config)

@@ -3,7 +3,7 @@
 import pandas as pd
 
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
-from preprocessing.crashes import clean_crashes, drop_ungeocoded, flag_highway, flag_ksi
+from preprocessing.crashes import clean_crashes, drop_ungeocoded, flag_ksi
 from preprocessing.panel import (
     add_camera_flags,
     add_lag_features,
@@ -178,24 +178,6 @@ def test_camera_flags_require_activation_before_the_year():
     assert out["rlc_active"].tolist() == [False, True, False]
     assert not out["speed_active"].any()  # unmatched camera ignored
     assert out["camera_site"].tolist() == [True, True, False]
-
-
-def test_flag_highway_matches_whole_words():
-    crashes = pd.DataFrame(
-        {
-            "on_street_name": [
-                "BELT PARKWAY",
-                "BQE EXPWY",
-                "PARKWAY PLACE X",
-                "PARKWAYS",
-                None,
-            ]
-        }
-    )
-
-    out = flag_highway(crashes, CONFIG)
-
-    assert out["highway"].tolist() == [True, True, True, False, False]
 
 
 def test_add_log1p_features_only_transforms_lags():

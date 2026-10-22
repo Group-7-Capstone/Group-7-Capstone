@@ -134,12 +134,6 @@ def add_log1p_features(panel: pd.DataFrame) -> pd.DataFrame:
     return panel.assign(**{f"log1p_{c}": np.log1p(panel[c]) for c in lags})
 
 
-def site_highway_share(crashes: pd.DataFrame, site_config: SiteConfig) -> pd.Series:
-    """Share of each site's crashes before `build_end` that are on a highway."""
-    train = crashes[crashes["crash_date"] < pd.Timestamp(site_config.build_end)]
-    return train.groupby("site_id")["highway"].mean().rename("highway_share")
-
-
 def assign_cameras(
     cameras: pd.DataFrame,
     sites: pd.DataFrame,
@@ -204,9 +198,6 @@ def load_panel(
     counts = append_scoring_year(count_site_years(crashes, sites, config), config)
     rows = add_lag_features(counts, config)
     rows = add_log1p_features(drop_mixed_definition_years(rows, config))
-    rows = rows.merge(
-        site_highway_share(crashes, site_config), on="site_id", how="left"
-    )
     cameras = assign_cameras(
         read_camera_data("camera_activation_dates"), sites, site_config, config
     )

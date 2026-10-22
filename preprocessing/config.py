@@ -33,13 +33,6 @@ class CrashConfig:
         "Apparent Death",
     )
 
-    # Crashes whose on_street_name matches this regex are flagged as highway
-    # (limited-access roads where the city can't place cameras). Crude: it also
-    # matches surface "parkways" such as Ocean Parkway.
-    highway_pattern: str = (
-        r"\b(?:EXPRESSWAY|EXPWY|EXPY|PARKWAY|PKWY|THRUWAY|HIGHWAY|HWY|BRIDGE|TUNNEL)\b"
-    )
-
 
 @dataclass(frozen=True)
 class SiteConfig:
