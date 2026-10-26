@@ -17,7 +17,10 @@ class _FakeClient:
 
 def test_fetch_pages_pages_by_id_cursor_not_offset():
     pages = [
-        [{"summons_number": "1", ":id": "row-a"}, {"summons_number": "2", ":id": "row-b"}],
+        [
+            {"summons_number": "1", ":id": "row-a"},
+            {"summons_number": "2", ":id": "row-b"},
+        ],
         [{"summons_number": "3", ":id": "row-c"}],
     ]
     client = _FakeClient(pages)

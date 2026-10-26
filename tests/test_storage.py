@@ -5,6 +5,7 @@ import pytest
 
 import data.base
 import data.download
+import data.reader
 from data.base import PROVENANCE_TABLE, get_connection, parquet_path
 from data.migrate import migrate
 from data.reader import read_table
@@ -139,3 +140,21 @@ def test_migrate_exports_pulled_tables_and_drops_derived():
         con.close()
     assert tables == [(PROVENANCE_TABLE,)]
     assert read_table("tickets_a")["summons_number"].tolist() == ["1"]
+
+
+def test_read_table_selects_columns(monkeypatch):
+    _fake_pull(monkeypatch, [[{"summons_number": "1", "street_name": "A ST"}]])
+    data.download.fetch_soda("abcd-1234", "tickets_test", WHERE)
+
+    df = read_table("tickets_test", columns=["street_name"])
+
+    assert df.columns.tolist() == ["street_name"]
+
+
+def test_read_camera_data_returns_csv_unchanged(tmp_path, monkeypatch):
+    (tmp_path / "cams.csv").write_text("camera_type,Latitude\nSpeed,40.7\n")
+    monkeypatch.setattr(data.reader, "CAMERA_DATA_DIR", tmp_path)
+
+    df = data.reader.read_camera_data("cams")
+
+    assert df.to_dict("records") == [{"camera_type": "Speed", "Latitude": 40.7}]
