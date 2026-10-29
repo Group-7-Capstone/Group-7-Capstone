@@ -9,6 +9,7 @@ from validation.validate import (
     calibration_table,
     evaluate,
     expanding_window_splits,
+    poisson_deviance,
     poisson_interval,
     top_k_capture,
     top_k_totals,
@@ -85,3 +86,11 @@ def test_evaluate_reports_each_test_year():
     assert capture.set_index("test_year")["capture"].to_dict() == {2024: 1.0, 2025: 0.5}
     assert set(calibration["test_year"]) == {2024, 2025}
     assert len(predictions) == 4
+
+
+def test_poisson_deviance_is_zero_for_perfect_and_matches_formula():
+    y = pd.Series([0, 1, 3])
+    assert np.isclose(poisson_deviance(y, y), 0)
+    pred = pd.Series([0.5, 2.0, 3.0])
+    expected = 2 * np.mean([0.5, np.log(1 / 2) + 1, 0])
+    assert np.isclose(poisson_deviance(y, pred), expected)
