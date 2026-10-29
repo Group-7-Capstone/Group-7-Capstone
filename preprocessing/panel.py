@@ -11,13 +11,16 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 
-from data.reader import read_camera_data
-from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
+from data.reader import read_camera_data, read_lion
+from preprocessing.config import CrashConfig, PanelConfig, RoadwayConfig, SiteConfig
 from preprocessing.crashes import load_crashes
+from preprocessing.roadway import SEGMENT_COLUMNS, clean_segments, find_intersections
 from preprocessing.sites import (
     add_site_borough,
     add_site_lonlat,
+    assign_nearest_site,
     assign_sites,
+    build_intersection_sites,
     build_site_points,
     project_coordinates,
     summarize_sites,
@@ -26,10 +29,12 @@ from preprocessing.sites import (
 log = logging.getLogger(__name__)
 
 RAW_COUNTS = ["ksi", "fatal", "injury", "crashes", "ped_injured", "cyc_injured"]
+# Crash types (overlapping, not tiers): red-light running, rear-end and angle.
+CRASH_TYPES = ["rlr", "rear_end", "angle"]
 # Mutually exclusive severity tiers: each crash counts in exactly one, unlike the
 # nested ksi/injury/crashes counts (fatal is already its own tier).
 SEVERITY_TIERS = ["pdo", "injury_nonsevere", "ksi_nonfatal"]
-COUNTS = RAW_COUNTS + SEVERITY_TIERS
+COUNTS = RAW_COUNTS + CRASH_TYPES + SEVERITY_TIERS
 CAMERA_TYPES = {"Red Light": "rlc_active", "Speed": "speed_active"}
 
 
@@ -67,9 +72,10 @@ def count_site_years(
                 + n("number_of_pedestrians_killed"),
                 "cyc_injured": n("number_of_cyclist_injured")
                 + n("number_of_cyclist_killed"),
+                **{t: c[t].astype("int64") for t in CRASH_TYPES},
             }
         )
-        .groupby(["site_id", "year"])[RAW_COUNTS]
+        .groupby(["site_id", "year"])[RAW_COUNTS + CRASH_TYPES]
         .sum()
     )
     grid = pd.MultiIndex.from_product(
@@ -176,6 +182,14 @@ def add_camera_flags(panel: pd.DataFrame, cameras: pd.DataFrame) -> pd.DataFrame
     return out
 
 
+def load_intersections(site_config: SiteConfig) -> pd.DataFrame:
+    """LION intersection nodes (`node_id`, `x`, `y`, `legs`) in `site_config.crs`."""
+    config = RoadwayConfig()
+    segments = clean_segments(read_lion("lion", SEGMENT_COLUMNS), config)
+    nodes = read_lion("node", ["NODEID"]).to_crs(site_config.crs)
+    return find_intersections(segments.to_crs(site_config.crs), nodes, config)
+
+
 def load_panel(
     crash_config: CrashConfig | None = None,
     site_config: SiteConfig | None = None,
@@ -190,9 +204,16 @@ def load_panel(
     site_config = site_config or SiteConfig()
     config = config or PanelConfig()
     crashes = project_coordinates(load_crashes(crash_config), site_config)
-    site_points = build_site_points(crashes, site_config)
-    sites = add_site_lonlat(summarize_sites(site_points), site_config)
-    crashes = assign_sites(crashes, site_points, site_config)
+    if site_config.source == "lion":
+        sites = add_site_lonlat(
+            build_intersection_sites(load_intersections(site_config), site_config),
+            site_config,
+        )
+        crashes = assign_nearest_site(crashes, sites, site_config)
+    else:
+        site_points = build_site_points(crashes, site_config)
+        sites = add_site_lonlat(summarize_sites(site_points), site_config)
+        crashes = assign_sites(crashes, site_points, site_config)
     sites = add_site_borough(sites, crashes, site_config)
 
     counts = append_scoring_year(count_site_years(crashes, sites, config), config)
