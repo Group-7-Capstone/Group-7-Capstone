@@ -1,0 +1,4 @@
+.road-trends .road-options{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin:20px 0;}
+.road-trends .road-options>label{display:flex;align-items:center;gap:8px;font-size:13px;}
+.road-trends .road-methods{font-size:14px;line-height:1.65;color:var(--secondary);padding:16px 0;}
+.road-trends .road-methods summary{cursor:pointer;color:var(--text);font-weight:600;}

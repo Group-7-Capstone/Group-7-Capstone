@@ -24,6 +24,22 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .Rhistory
+
+# Local experiment artifacts and runtimes
+.tools/
+data/lion/
+experiments/camera-ticket-trends/outputs/
+experiments/camera-ticket-trends/browser/*
+!experiments/camera-ticket-trends/browser/src/
+experiments/camera-ticket-trends/browser/src/*
+!experiments/camera-ticket-trends/browser/src/content/
+experiments/camera-ticket-trends/*.html
+# Reviewed standalone deliverables; generated browser directories stay ignored.
+!experiments/camera-ticket-trends/Camera_Ticket_Trends.html
+!experiments/camera-ticket-trends/Per_Camera_Ticket_Trends.html
+!experiments/camera-ticket-trends/Shared_Ticket_Trends_and_Clusters.html
+!experiments/camera-ticket-trends/Ticket_Trend_Processing_Walkthrough.html
+*.log
 data/lion/
 
 # Generated experiment outputs (risk tables, local report site)

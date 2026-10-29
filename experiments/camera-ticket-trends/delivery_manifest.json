@@ -1,0 +1,78 @@
+{
+  "branch": "yihan/pipeline-integration",
+  "base_commit": "797e4412cc1d1ac82319377045628a37629a3ad9",
+  "delivery": "Executed notebooks, static reading copies, standalone interactive HTML and reproducible source code. Website hosting is not included.",
+  "excluded": [
+    "Raw datasets",
+    "Frozen ticket caches",
+    "LION source snapshot",
+    "Separate aggregate output tables",
+    "Python environment",
+    "Generated browser directories"
+  ],
+  "validation": {
+    "full_repository_tests_passed": 74,
+    "tables_reconciled": 30,
+    "table_rows_reconciled": 1000436,
+    "max_float_difference": 0.0,
+    "allowed_float_rtol": 1e-10,
+    "allowed_float_atol": 1e-08,
+    "notebooks": [
+      {
+        "file": "Per_Camera_Ticket_Trends.ipynb",
+        "executed_code_cells": 14,
+        "saved_figures": 7,
+        "error_outputs": 0,
+        "figures_identical_to_original": true
+      },
+      {
+        "file": "Shared_Ticket_Trends_and_Clusters.ipynb",
+        "executed_code_cells": 9,
+        "saved_figures": 7,
+        "error_outputs": 0,
+        "figures_identical_to_original": true
+      },
+      {
+        "file": "Ticket_Trend_Processing_Walkthrough.ipynb",
+        "executed_code_cells": 19,
+        "saved_figures": 8,
+        "error_outputs": 0,
+        "figures_identical_to_original": true
+      }
+    ],
+    "launcher_modes_checked": [
+      "Existing local browser build",
+      "Standalone HTML after cloning"
+    ]
+  },
+  "artifacts": {
+    "Camera_Ticket_Trends.html": {
+      "bytes": 58837688,
+      "sha256": "ba2635b116b3593d1ce263721de2017e6c64310afa9171e614b09ae9440fff97"
+    },
+    "Per_Camera_Ticket_Trends.html": {
+      "bytes": 1236515,
+      "sha256": "86a46362449cc48ce69b39d63a4fe8b5aa21bbb8ed5ee5f7ca989070a53f1775"
+    },
+    "Per_Camera_Ticket_Trends.ipynb": {
+      "bytes": 946532,
+      "sha256": "6394730391fb1794dc2cd294750bd593f935b0d91d9fde5a7acdea0566369c07"
+    },
+    "Shared_Ticket_Trends_and_Clusters.html": {
+      "bytes": 1385974,
+      "sha256": "08383516f80167a2ad68abb1fdbc296a40186dd2239a812c0e37e56a9e186948"
+    },
+    "Shared_Ticket_Trends_and_Clusters.ipynb": {
+      "bytes": 1107794,
+      "sha256": "ed5f4e99b68dad209575298160f3825a433b7ae412ec7176695c5e261a902ca8"
+    },
+    "Ticket_Trend_Processing_Walkthrough.html": {
+      "bytes": 1965267,
+      "sha256": "bf2ceee228c58db4bbe428d86940426bef0cdfb376329fdcd84ec60936526165"
+    },
+    "Ticket_Trend_Processing_Walkthrough.ipynb": {
+      "bytes": 1644735,
+      "sha256": "6b75dd5b8204ee6b77e26066fe4fe2fa3483a6d9d9aecbeb05de24ba9b29333b"
+    }
+  }
+}

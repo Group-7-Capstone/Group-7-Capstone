@@ -1,0 +1,4 @@
+# Preserve reviewed artifact bytes and SHA-256 receipts across operating systems.
+experiments/camera-ticket-trends/*.ipynb -text whitespace=cr-at-eol
+# Generated HTML contains exporter whitespace; retain exact verified bytes.
+experiments/camera-ticket-trends/*.html -text whitespace=-blank-at-eol,-blank-at-eof,cr-at-eol

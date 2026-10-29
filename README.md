@@ -50,3 +50,7 @@ Optional: copy `.env.example` to `.env` and add your own free Socrata app token 
 
 ## Contributing1
 Work is tracked in GitHub Issues grouped into epics. Keep PRs to one issue and under about 500 lines. Rules for coding agents and contributors are in [`AGENTS.md`](AGENTS.md), and current work is in [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
+
+## Camera ticket trend experiment
+
+The local [camera ticket trend experiment](experiments/camera-ticket-trends/README.md) uses the shared downloader and raw readers, with reusable camera-to-LION features in preprocessing. It preserves the frozen individual histories, shared trends and exploratory clusters. Road matching currently covers the original camera groups; matching all crash-derived sites and refitting the Q1 model are separate future work.
