@@ -161,24 +161,29 @@ def pooled_holdout(
     top_k: tuple[int, ...],
     y_col: str = "ksi",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fit once on years before the test window, score every test year, and
-    evaluate each site's total over the window.
+    """Fit once on years before the test window and evaluate each site's total
+    over the window.
 
-    Summing several years gives each site a larger, less noisy count than a
-    single test year. Returns (metrics, site_totals): `metrics` has top-k capture
-    per k plus `deviance` (k = NA); `site_totals` has each site's observed and
-    predicted total.
+    Every site is scored from its row for the first test year, whose lag features
+    end before the window; later rows' lags include test-window crashes, so using
+    them would leak the outcome into the prediction. The predicted total is that
+    yearly rate times the number of test years. Summing several years gives each
+    site a larger, less noisy count than a single test year.
+
+    Returns (metrics, site_totals): `metrics` has top-k capture per k plus
+    `deviance` (k = NA); `site_totals` has each site's observed and predicted total.
     """
-    train = panel[panel["year"] < min(test_years)]
-    test = panel[panel["year"].isin(test_years)]
+    first = min(test_years)
+    train = panel[panel["year"] < first]
     model = make_model().fit(train, train[y_col], groups=train["site_id"])
-    totals = (
-        test[["site_id", y_col]]
-        .assign(pred=model.predict(test))
-        .groupby("site_id")[[y_col, "pred"]]
-        .sum()
-        .reset_index()
-    )
+    start = panel[panel["year"] == first].set_index("site_id")
+    observed = panel[panel["year"].isin(test_years)].groupby("site_id")[y_col].sum()
+    totals = pd.DataFrame(
+        {
+            y_col: observed,
+            "pred": model.predict(start).reindex(observed.index) * len(test_years),
+        }
+    ).reset_index()
     y, pred = totals[y_col], totals["pred"]
     metrics = [
         {"metric": "capture", "k": k, "value": top_k_capture(y, pred, k)} for k in top_k

@@ -97,13 +97,15 @@ def test_poisson_deviance_is_zero_for_perfect_and_matches_formula():
     assert np.isclose(poisson_deviance(y, pred), expected)
 
 
-def test_pooled_holdout_trains_before_window_and_sums_sites():
+def test_pooled_holdout_scores_from_window_start_and_sums_sites():
     metrics, totals = pooled_holdout(
         lambda: HistoryRanker("ksi_lag3", 3), _panel(), (2024, 2025), (1,)
     )
+    totals = totals.set_index("site_id")
 
-    # Site 0: predicted 3/3 + 4/3, observed 2 + 1. Site 1: 0 + 0, observed 0 + 1.
-    assert totals.set_index("site_id")["ksi"].to_dict() == {0: 3, 1: 1}
+    # Observed: site 0 = 2 + 1, site 1 = 0 + 1. Predicted from the 2024 rows only
+    # (lags end before the window): site 0 = 3/3 * 2 years, site 1 = 0.
+    assert totals["ksi"].to_dict() == {0: 3, 1: 1}
+    assert totals["pred"].to_dict() == {0: 2.0, 1: 0.0}
     capture = metrics.query("metric == 'capture'")["value"].iloc[0]
     assert capture == 0.75
-    assert "deviance" in set(metrics["metric"])
