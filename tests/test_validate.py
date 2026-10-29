@@ -5,6 +5,7 @@ import pandas as pd
 
 from model.count_models import HistoryRanker
 from validation.validate import (
+    pooled_holdout,
     ValidationConfig,
     calibration_table,
     evaluate,
@@ -94,3 +95,15 @@ def test_poisson_deviance_is_zero_for_perfect_and_matches_formula():
     pred = pd.Series([0.5, 2.0, 3.0])
     expected = 2 * np.mean([0.5, np.log(1 / 2) + 1, 0])
     assert np.isclose(poisson_deviance(y, pred), expected)
+
+
+def test_pooled_holdout_trains_before_window_and_sums_sites():
+    metrics, totals = pooled_holdout(
+        lambda: HistoryRanker("ksi_lag3", 3), _panel(), (2024, 2025), (1,)
+    )
+
+    # Site 0: predicted 3/3 + 4/3, observed 2 + 1. Site 1: 0 + 0, observed 0 + 1.
+    assert totals.set_index("site_id")["ksi"].to_dict() == {0: 3, 1: 1}
+    capture = metrics.query("metric == 'capture'")["value"].iloc[0]
+    assert capture == 0.75
+    assert "deviance" in set(metrics["metric"])
