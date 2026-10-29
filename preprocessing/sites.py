@@ -15,6 +15,8 @@ import logging
 import numpy as np
 import pandas as pd
 from pyproj import Transformer
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
 from preprocessing.config import SiteConfig
@@ -134,5 +136,59 @@ def assign_sites(
         (~matched & after).sum(),
         after.sum(),
         config.build_end,
+    )
+    return crashes.assign(site_id=site_id)
+
+
+def build_intersection_sites(
+    intersections: pd.DataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """One site per intersection: LION intersection nodes (`node_id`, `x`, `y`,
+    `legs`, as from `roadway.find_intersections`) within `node_merge_ft` of each
+    other are merged, since a divided road meets a street at several nodes.
+
+    Returns `site_id`, centroid `x`, `y`, `n_nodes` and `legs` (the most at any node).
+    """
+    xy = intersections[["x", "y"]].to_numpy()
+    pairs = cKDTree(xy).query_pairs(config.node_merge_ft, output_type="ndarray")
+    n = len(xy)
+    graph = coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), (n, n))
+    _, label = connected_components(graph, directed=False)
+    sites = (
+        intersections.assign(site_id=label)
+        .groupby("site_id")
+        .agg(
+            x=("x", "mean"),
+            y=("y", "mean"),
+            n_nodes=("node_id", "size"),
+            legs=("legs", "max"),
+        )
+        .reset_index()
+    )
+    log.info(
+        "build_intersection_sites: %d intersection nodes -> %d sites (%d merged)",
+        n,
+        len(sites),
+        (sites["n_nodes"] > 1).sum(),
+    )
+    return sites
+
+
+def assign_nearest_site(
+    crashes: pd.DataFrame, sites: pd.DataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """Add `site_id` to each crash: the nearest site centroid within `radius_ft`."""
+    dist, idx = cKDTree(sites[["x", "y"]].to_numpy()).query(
+        crashes[["x", "y"]].to_numpy(), distance_upper_bound=config.radius_ft
+    )
+    matched = np.isfinite(dist)
+    site_id = pd.Series(pd.NA, index=crashes.index, dtype="Int64")
+    site_id[matched] = sites["site_id"].to_numpy()[idx[matched]]
+    log.info(
+        "assign_nearest_site: %d of %d crashes (%.1f%%) within %.0f ft of a site",
+        matched.sum(),
+        len(crashes),
+        100 * matched.mean(),
+        config.radius_ft,
     )
     return crashes.assign(site_id=site_id)

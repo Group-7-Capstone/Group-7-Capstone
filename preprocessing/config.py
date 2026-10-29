@@ -33,6 +33,30 @@ class CrashConfig:
         "Apparent Death",
     )
 
+    # Crash types. A crash is red-light running (RLR) if any vehicle's contributing
+    # factor is this value (a proxy: it also covers stop signs and other controls).
+    rlr_factor: str = "Traffic Control Disregarded"
+    # Vehicles table `point_of_impact` groups. Rear-end: one vehicle hit on its
+    # front, another on its back. Angle: one hit on its front, another on its side.
+    front_impacts: tuple[str, ...] = (
+        "Center Front End",
+        "Left Front Bumper",
+        "Right Front Bumper",
+    )
+    rear_impacts: tuple[str, ...] = (
+        "Center Back End",
+        "Left Rear Bumper",
+        "Right Rear Bumper",
+    )
+    side_impacts: tuple[str, ...] = (
+        "Left Front Quarter Panel",
+        "Right Front Quarter Panel",
+        "Left Side Doors",
+        "Right Side Doors",
+        "Left Rear Quarter Panel",
+        "Right Rear Quarter Panel",
+    )
+
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -44,6 +68,13 @@ class SiteConfig:
     # Sites are built only from crashes before this date, so held-out years
     # never define which sites exist. Test periods must start on or after it.
     build_end: str = "2024-01-01"
+    # "crashes": peak-radius crash clusters (Q1, Q2). "lion": LION intersections,
+    # which don't depend on crash dates, so `build_end` only limits crash clusters.
+    source: str = "crashes"
+    # LION nodes of one intersection (divided roads meet at several nodes) within
+    # this many feet of each other are merged into one site. With "lion", a crash
+    # belongs to the nearest site within `radius_ft`.
+    node_merge_ft: float = 60.0
 
 
 @dataclass(frozen=True)
