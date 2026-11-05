@@ -4,6 +4,8 @@ This deliverable follows all 4,610 original normalized-address/camera-type group
 
 ## Shared pipeline integration
 
+The newer [intersection-pair extension](intersection-pairs/README.md) includes saved figures and methods for classifying both named streets before comparing ticket trends. It is separate from the existing dashboard's first-street analysis.
+
 The active experiment now lives under `experiments/camera-ticket-trends/`. The branch `yihan/pipeline-integration` is based on the team main branch containing PR #22. The original worktree and its analytical outputs remain the rollback reference. This upload uses a separate branch and does not merge into main or open a pull request.
 
 Raw reads use `data.reader`: the team's `read_table(..., columns=...)` and `read_camera_data("camera_activation_dates")` are retained alongside bounded ticket batches and the LION reader. The current registry is checked against the original recorded content hash without invoking Git at analysis runtime. `registry_pin.json` retains historical provenance; `registry_reader_receipt.json` records the current shared-reader check.
