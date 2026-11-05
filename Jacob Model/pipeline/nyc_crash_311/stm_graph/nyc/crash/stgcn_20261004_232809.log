@@ -1,0 +1,26 @@
+2026-10-04 23:28:09,577 - INFO - ==================== EXPERIMENT: stgcn ====================
+2026-10-04 23:28:09,578 - INFO - Started training at: 20261004_232809
+2026-10-04 23:28:09,579 - INFO - Model: ClassificationWrapper
+2026-10-04 23:28:09,580 - INFO - Task: classification
+2026-10-04 23:28:09,581 - INFO - Batch size: 10 (fixed: True)
+2026-10-04 23:28:09,582 - INFO - Learning rate: 0.0001
+2026-10-04 23:28:09,583 - INFO - Epochs: 500
+2026-10-05 00:10:28,797 - ERROR - Error initializing WandB: 
+2026-10-05 00:10:28,799 - INFO - Using device: cpu
+2026-10-05 00:10:28,812 - INFO - Using optimizer: Adam
+2026-10-05 00:10:28,814 - INFO - Using StepLR scheduler (step=50, gamma=1)
+2026-10-05 00:10:28,830 - INFO - Class weights for positive samples: 18.4960
+2026-10-05 00:10:28,833 - INFO - Using BCEWithLogitsLoss for classification
+2026-10-05 00:10:28,834 - INFO - Data split: 1646 train, 353 validation, 353 test (total: 2352 timesteps)
+2026-10-05 00:16:25,668 - INFO - Epoch 1/500 - Train loss: 0.6692, Val loss: 0.8796, Val acc: 0.9237, Val F1: 0.3742
+2026-10-05 00:16:25,670 - INFO - Validation metrics: {'accuracy': 0.9236631353260184, 'balanced_accuracy': 0.7153681014046471, 'precision': 0.30449594145602893, 'recall': 0.4854499128335792, 'f1': 0.37424724096043005, 'mcc': 0.34625234558670376, 'specificity': 0.9452862899757152, 'auc': 0.9252836397043208, 'pr_auc': 0.3101324603369795}
+2026-10-05 00:16:25,683 - INFO - Saved new best model at epoch 1 with val_loss=0.8796
+2026-10-05 00:22:19,159 - INFO - Epoch 2/500 - Train loss: 0.4261, Val loss: 1.0349, Val acc: 0.9320, Val F1: 0.3493
+2026-10-05 00:22:19,161 - INFO - Validation metrics: {'accuracy': 0.9319712447975785, 'balanced_accuracy': 0.6735775419417269, 'precision': 0.3174394387811027, 'recall': 0.38835993026686333, 'f1': 0.3493365500603136, 'mcc': 0.3156050302983721, 'specificity': 0.9587951536165905, 'auc': 0.9357262736322559, 'pr_auc': 0.3272919370604422}
+2026-10-05 00:28:41,549 - INFO - Epoch 3/500 - Train loss: 0.3995, Val loss: 1.2849, Val acc: 0.9360, Val F1: 0.3244
+2026-10-05 00:28:41,550 - INFO - Validation metrics: {'accuracy': 0.9359944507504099, 'balanced_accuracy': 0.6463987128767082, 'precision': 0.32203277821834525, 'recall': 0.3267399758616065, 'f1': 0.32436930040604406, 'mcc': 0.29078555901223035, 'specificity': 0.96605744989181, 'auc': 0.9347371897044103, 'pr_auc': 0.32959837031638606}
+2026-10-05 00:34:40,640 - INFO - Epoch 4/500 - Train loss: 0.3880, Val loss: 1.4994, Val acc: 0.9377, Val F1: 0.3073
+2026-10-05 00:34:40,641 - INFO - Validation metrics: {'accuracy': 0.9377412031782065, 'balanced_accuracy': 0.6315707800513304, 'precision': 0.32222222222222224, 'recall': 0.293616735952796, 'f1': 0.30725512208812794, 'mcc': 0.2750601287187582, 'specificity': 0.9695248241498646, 'auc': 0.9342230213651873, 'pr_auc': 0.3308479072333733}
+2026-10-05 00:40:47,872 - INFO - Epoch 5/500 - Train loss: 0.3804, Val loss: 1.8019, Val acc: 0.9431, Val F1: 0.2905
+2026-10-05 00:40:47,873 - INFO - Validation metrics: {'accuracy': 0.9431012738050195, 'balanced_accuracy': 0.6125831136305225, 'precision': 0.3511689792815054, 'recall': 0.24775378838675072, 'f1': 0.2905331026891021, 'mcc': 0.2661450945925167, 'specificity': 0.9774124388742944, 'auc': 0.9332330343153841, 'pr_auc': 0.3290238845900493}
+2026-10-05 09:59:01,020 - INFO - Logging completed
