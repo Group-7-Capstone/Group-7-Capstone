@@ -1,9 +1,14 @@
-"""Tests for crash cleaning, KSI flagging and site clustering in preprocessing/."""
+"""Tests for crash cleaning, KSI and crash-type flags, and sites in preprocessing/."""
 
 import pandas as pd
 
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
-from preprocessing.crashes import clean_crashes, drop_ungeocoded, flag_ksi
+from preprocessing.crashes import (
+    clean_crashes,
+    drop_ungeocoded,
+    flag_crash_types,
+    flag_ksi,
+)
 from preprocessing.panel import (
     add_camera_flags,
     add_lag_features,
@@ -14,7 +19,9 @@ from preprocessing.panel import (
 )
 from preprocessing.sites import (
     add_site_borough,
+    assign_nearest_site,
     assign_sites,
+    build_intersection_sites,
     build_site_points,
     project_coordinates,
     summarize_sites,
@@ -130,6 +137,9 @@ def _site_crashes(rows):
             "number_of_pedestrians_killed": pd.array([0] * len(df), dtype="Int64"),
             "number_of_cyclist_injured": pd.array([0] * len(df), dtype="Int64"),
             "number_of_cyclist_killed": pd.array([0] * len(df), dtype="Int64"),
+            "rlr": df["ksi"],
+            "rear_end": False,
+            "angle": False,
         }
     )
 
@@ -251,3 +261,77 @@ def test_site_borough_is_most_common_before_build_end():
 
     assert out["borough"].iloc[0] == "QUEENS"
     assert pd.isna(out["borough"].iloc[1])
+
+
+def test_flag_crash_types_from_factors_and_impact_points():
+    crashes = pd.DataFrame(
+        {
+            "collision_id": [1, 2, 3, 4],
+            "contributing_factor_vehicle_1": [
+                "Traffic Control Disregarded",
+                "Unspecified",
+                None,
+                "Unspecified",
+            ],
+            "contributing_factor_vehicle_2": [
+                None,
+                "Traffic Control Disregarded",
+                None,
+                None,
+            ],
+        }
+    )
+    vehicles = pd.DataFrame(
+        {
+            "collision_id": ["1", "1", "2", "2", "3", "3", "3"],
+            "point_of_impact": [
+                "Center Front End",  # 1: front + back -> rear-end
+                "Center Back End",
+                "Left Front Bumper",  # 2: front + side -> angle
+                "Right Side Doors",
+                "Center Front End",  # 3: front + back + side -> rear-end, not angle
+                "Left Rear Bumper",
+                "Left Side Doors",
+            ],
+        }
+    )
+
+    out = flag_crash_types(crashes, vehicles, CONFIG).set_index("collision_id")
+
+    assert out["rlr"].tolist() == [True, True, False, False]
+    assert out["rear_end"].tolist() == [True, False, True, False]
+    assert out["angle"].tolist() == [False, True, False, False]  # 4: no vehicles
+
+
+def test_crash_type_counts_reach_the_panel():
+    config = PanelConfig(first_year=2017, last_year=2018, lag_years=1)
+    crashes = _site_crashes(
+        [(0, "2017-05-01", True, 1, 0), (0, "2018-05-01", False, 0, 0)]
+    )
+
+    counts = count_site_years(crashes, pd.DataFrame({"site_id": [0]}), config)
+
+    assert counts.set_index("year")["rlr"].to_dict() == {2017: 1, 2018: 0}
+
+
+def test_intersection_sites_merge_nearby_nodes_and_take_nearest_crashes():
+    config = SiteConfig(node_merge_ft=60.0, radius_ft=100.0)
+    nodes = pd.DataFrame(
+        {
+            "node_id": [10, 11, 12],
+            "x": [0.0, 50.0, 1000.0],  # 10 and 11: one divided-road intersection
+            "y": [0.0, 0.0, 0.0],
+            "legs": [3, 4, 4],
+        }
+    )
+
+    sites = build_intersection_sites(nodes, config)
+    crashes = pd.DataFrame({"x": [30.0, 990.0, 500.0], "y": [5.0, 0.0, 0.0]})
+    assigned = assign_nearest_site(crashes, sites, config)
+
+    assert sorted(sites["n_nodes"]) == [1, 2]
+    merged = sites.loc[sites["n_nodes"] == 2].iloc[0]
+    assert (merged["x"], merged["legs"]) == (25.0, 4)
+    by_x = dict(zip(sites["x"], sites["site_id"]))
+    assert assigned["site_id"].tolist()[:2] == [by_x[25.0], by_x[1000.0]]
+    assert pd.isna(assigned["site_id"].iloc[2])  # 475+ ft from both
