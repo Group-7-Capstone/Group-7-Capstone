@@ -7,6 +7,7 @@ feature uses information from the outcome year.
 
 import logging
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
@@ -20,7 +21,9 @@ from preprocessing.sites import (
     add_site_lonlat,
     assign_nearest_site,
     assign_sites,
+    assign_unmatched_to_blocks,
     build_intersection_sites,
+    build_midblock_sites,
     build_site_points,
     project_coordinates,
     summarize_sites,
@@ -36,6 +39,8 @@ CRASH_TYPES = ["rlr", "rear_end", "angle"]
 SEVERITY_TIERS = ["pdo", "injury_nonsevere", "ksi_nonfatal"]
 COUNTS = RAW_COUNTS + CRASH_TYPES + SEVERITY_TIERS
 CAMERA_TYPES = {"Red Light": "rlc_active", "Speed": "speed_active"}
+# Site-type columns from `add_site_features` (LION sites only).
+SITE_FEATURES = ["midblock", "log_block_length"]
 
 
 def count_site_years(
@@ -182,12 +187,60 @@ def add_camera_flags(panel: pd.DataFrame, cameras: pd.DataFrame) -> pd.DataFrame
     return out
 
 
-def load_intersections(site_config: SiteConfig) -> pd.DataFrame:
+def load_street_segments(site_config: SiteConfig) -> gpd.GeoDataFrame:
+    """Drivable LION street segments, with `SegmentID`, in `site_config.crs`."""
+    segments = read_lion("lion", SEGMENT_COLUMNS + ["SegmentID"])
+    return clean_segments(segments, RoadwayConfig()).to_crs(site_config.crs)
+
+
+def load_intersections(
+    site_config: SiteConfig, segments: gpd.GeoDataFrame | None = None
+) -> pd.DataFrame:
     """LION intersection nodes (`node_id`, `x`, `y`, `legs`) in `site_config.crs`."""
-    config = RoadwayConfig()
-    segments = clean_segments(read_lion("lion", SEGMENT_COLUMNS), config)
+    if segments is None:
+        segments = load_street_segments(site_config)
     nodes = read_lion("node", ["NODEID"]).to_crs(site_config.crs)
-    return find_intersections(segments.to_crs(site_config.crs), nodes, config)
+    return find_intersections(segments, nodes, RoadwayConfig())
+
+
+def build_lion_sites(
+    crashes: pd.DataFrame, site_config: SiteConfig
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """LION sites and the crashes with their `site_id`.
+
+    Intersection sites come first; with `site_config.midblock`, crashes not near
+    an intersection go to the nearest street segment (generic centerline, one per
+    street), which becomes a mid-block site. `midblock` marks the site type.
+    """
+    segments = load_street_segments(site_config)
+    sites = build_intersection_sites(
+        load_intersections(site_config, segments), site_config
+    ).assign(midblock=False)
+    crashes = assign_nearest_site(crashes, sites, site_config)
+    if site_config.midblock:
+        generic = segments[
+            segments["SegmentTyp"].isin(RoadwayConfig().generic_segment_types)
+        ]
+        blocks = build_midblock_sites(generic, int(sites["site_id"].max()) + 1)
+        crashes = assign_unmatched_to_blocks(crashes, blocks, site_config)
+        sites = pd.concat(
+            [
+                sites,
+                pd.DataFrame(blocks.drop(columns="geometry")).assign(midblock=True),
+            ],
+            ignore_index=True,
+        )
+    return add_site_lonlat(sites, site_config), crashes
+
+
+def add_site_features(panel: pd.DataFrame, sites: pd.DataFrame) -> pd.DataFrame:
+    """Add `SITE_FEATURES` by `site_id`: `midblock` (0/1) and `log_block_length`
+    (log feet, at least 1 ft; 0 for intersections, so it only acts mid-block)."""
+    midblock = sites.set_index("site_id")["midblock"]
+    length = sites.set_index("site_id")["length_ft"].clip(lower=1)
+    out = panel.assign(midblock=panel["site_id"].map(midblock).astype(int))
+    log_length = np.log(panel["site_id"].map(length)).fillna(0.0)
+    return out.assign(log_block_length=log_length.where(out["midblock"] == 1, 0.0))
 
 
 def load_panel(
@@ -205,11 +258,7 @@ def load_panel(
     config = config or PanelConfig()
     crashes = project_coordinates(load_crashes(crash_config), site_config)
     if site_config.source == "lion":
-        sites = add_site_lonlat(
-            build_intersection_sites(load_intersections(site_config), site_config),
-            site_config,
-        )
-        crashes = assign_nearest_site(crashes, sites, site_config)
+        sites, crashes = build_lion_sites(crashes, site_config)
     else:
         site_points = build_site_points(crashes, site_config)
         sites = add_site_lonlat(summarize_sites(site_points), site_config)
@@ -223,6 +272,8 @@ def load_panel(
         read_camera_data("camera_activation_dates"), sites, site_config, config
     )
     rows = add_camera_flags(rows, cameras)
+    if "midblock" in sites:
+        rows = add_site_features(rows, sites)
     for col in COUNTS:
         rows[col] = rows[col].astype("Int64")
     scoring = rows["year"] > config.last_year
