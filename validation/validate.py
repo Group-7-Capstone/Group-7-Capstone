@@ -73,6 +73,18 @@ def top_k_totals(y: pd.Series, pred: pd.Series, k: int) -> tuple[float, float]:
     return predicted, top_k_capture(y, pred, k) * float(np.sum(y))
 
 
+def poisson_deviance(y: pd.Series, pred: pd.Series) -> float:
+    """Mean Poisson deviance of predicted counts (lower is better).
+
+    Unlike top-k capture it scores every site, not just the top of the ranking,
+    so it can separate models whose top lists are nearly the same.
+    """
+    y = np.asarray(y, dtype=float)
+    mu = np.clip(np.asarray(pred, dtype=float), 1e-12, None)
+    log_term = np.where(y > 0, y * np.log(np.where(y > 0, y, 1) / mu), 0.0)
+    return float(np.mean(2 * (log_term - (y - mu))))
+
+
 def poisson_interval(count, level: float = 0.95) -> tuple[np.ndarray, np.ndarray]:
     """Exact (Garwood) interval for a Poisson count; works elementwise on arrays."""
     count = np.asarray(count, dtype=float)
