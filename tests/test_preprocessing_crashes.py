@@ -1,6 +1,9 @@
 """Tests for crash cleaning, KSI and crash-type flags, and sites in preprocessing/."""
 
+import geopandas as gpd
+import numpy as np
 import pandas as pd
+from shapely.geometry import LineString
 
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
 from preprocessing.crashes import (
@@ -13,6 +16,7 @@ from preprocessing.panel import (
     add_camera_flags,
     add_lag_features,
     add_log1p_features,
+    add_site_features,
     append_scoring_year,
     count_site_years,
     drop_mixed_definition_years,
@@ -21,7 +25,9 @@ from preprocessing.sites import (
     add_site_borough,
     assign_nearest_site,
     assign_sites,
+    assign_unmatched_to_blocks,
     build_intersection_sites,
+    build_midblock_sites,
     build_site_points,
     project_coordinates,
     summarize_sites,
@@ -335,3 +341,54 @@ def test_intersection_sites_merge_nearby_nodes_and_take_nearest_crashes():
     by_x = dict(zip(sites["x"], sites["site_id"]))
     assert assigned["site_id"].tolist()[:2] == [by_x[25.0], by_x[1000.0]]
     assert pd.isna(assigned["site_id"].iloc[2])  # 475+ ft from both
+
+
+def test_midblock_sites_one_per_segment_numbered_after_intersections():
+    segments = gpd.GeoDataFrame(
+        {"SegmentID": ["0001", "0001", "0002"]},  # 0001 listed twice in LION
+        geometry=[
+            LineString([(0, 0), (400, 0)]),
+            LineString([(0, 0), (400, 0)]),
+            LineString([(0, 0), (0, 300)]),
+        ],
+    )
+
+    blocks = build_midblock_sites(segments, first_id=10)
+
+    assert blocks["site_id"].tolist() == [10, 11]
+    assert blocks[["x", "y", "length_ft"]].values.tolist() == [
+        [200.0, 0.0, 400.0],
+        [0.0, 150.0, 300.0],
+    ]
+
+
+def test_crashes_off_intersections_go_to_the_nearest_block_within_radius():
+    config = SiteConfig(radius_ft=100.0)
+    blocks = gpd.GeoDataFrame(
+        {"site_id": [10]}, geometry=[LineString([(0, 0), (1000, 0)])]
+    )
+    crashes = pd.DataFrame(
+        {
+            "site_id": pd.array([3, pd.NA, pd.NA], dtype="Int64"),
+            "x": [500.0, 500.0, 500.0],
+            "y": [20.0, 40.0, 400.0],  # third is 400 ft from the street
+        }
+    )
+
+    out = assign_unmatched_to_blocks(crashes, blocks, config)
+
+    assert out["site_id"].iloc[0] == 3  # already at an intersection: unchanged
+    assert out["site_id"].iloc[1] == 10
+    assert pd.isna(out["site_id"].iloc[2])
+
+
+def test_site_features_flag_midblock_and_log_length_only_there():
+    sites = pd.DataFrame(
+        {"site_id": [0, 1], "midblock": [False, True], "length_ft": [np.nan, 400.0]}
+    )
+    panel = pd.DataFrame({"site_id": [0, 1], "year": [2023, 2023]})
+
+    out = add_site_features(panel, sites)
+
+    assert out["midblock"].tolist() == [0, 1]
+    assert out["log_block_length"].tolist() == [0.0, np.log(400.0)]

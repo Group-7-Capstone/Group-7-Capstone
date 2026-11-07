@@ -8,10 +8,15 @@ so no site extends more than `radius_ft` from its center.
 
 Every crash (any year) is then assigned to its nearest center within
 `radius_ft`; crashes farther than that stay unassigned (NA).
+
+With `SiteConfig.source == "lion"` sites come from the street network instead:
+merged LION intersections, plus (if `midblock`) one site per street segment for
+crashes away from intersections.
 """
 
 import logging
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from pyproj import Transformer
@@ -172,6 +177,52 @@ def build_intersection_sites(
         (sites["n_nodes"] > 1).sum(),
     )
     return sites
+
+
+def build_midblock_sites(segments: gpd.GeoDataFrame, first_id: int) -> gpd.GeoDataFrame:
+    """One site per LION street segment (`SegmentID`), i.e. one block between two
+    nodes, numbered from `first_id` so ids don't collide with intersection sites.
+
+    `segments` should hold one centerline per street (LION's generic segments).
+    Returns `site_id`, the segment's midpoint `x`, `y`, `length_ft` and its geometry.
+    """
+    blocks = segments.drop_duplicates("SegmentID").reset_index(drop=True)
+    mid = blocks.geometry.interpolate(0.5, normalized=True)
+    log.info("build_midblock_sites: %d street segments", len(blocks))
+    return gpd.GeoDataFrame(
+        {
+            "site_id": np.arange(first_id, first_id + len(blocks)),
+            "x": mid.x.to_numpy(),
+            "y": mid.y.to_numpy(),
+            "length_ft": blocks.geometry.length.to_numpy(),
+        },
+        geometry=blocks.geometry.to_numpy(),
+        crs=segments.crs,
+    )
+
+
+def assign_unmatched_to_blocks(
+    crashes: pd.DataFrame, blocks: gpd.GeoDataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """Give crashes without a `site_id` the nearest block within `radius_ft`."""
+    todo = crashes.index[crashes["site_id"].isna()]
+    points = gpd.GeoSeries(
+        gpd.points_from_xy(crashes.loc[todo, "x"], crashes.loc[todo, "y"]),
+        crs=blocks.crs,
+    )
+    point_i, block_i = blocks.sindex.nearest(points, max_distance=config.radius_ft)
+    # Ties (equidistant blocks) return several rows per point; keep the first.
+    first = ~pd.Series(point_i).duplicated().to_numpy()
+    site_id = crashes["site_id"].copy()
+    site_id[todo[point_i[first]]] = blocks["site_id"].to_numpy()[block_i[first]]
+    log.info(
+        "assign_unmatched_to_blocks: %d of %d crashes off intersections matched to "
+        "a block; %d stay unassigned",
+        first.sum(),
+        len(todo),
+        len(todo) - first.sum(),
+    )
+    return crashes.assign(site_id=site_id)
 
 
 def assign_nearest_site(

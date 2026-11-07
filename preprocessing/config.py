@@ -68,13 +68,19 @@ class SiteConfig:
     # Sites are built only from crashes before this date, so held-out years
     # never define which sites exist. Test periods must start on or after it.
     build_end: str = "2024-01-01"
-    # "crashes": peak-radius crash clusters (Q1, Q2). "lion": LION intersections,
-    # which don't depend on crash dates, so `build_end` only limits crash clusters.
-    source: str = "crashes"
+    # "lion" (the team standard): LION intersections, plus mid-block sites if
+    # `midblock`. "crashes": peak-radius crash clusters (Q1, Q2). LION sites don't
+    # depend on crash dates, so `build_end` only limits crash clusters.
+    source: str = "lion"
     # LION nodes of one intersection (divided roads meet at several nodes) within
     # this many feet of each other are merged into one site. With "lion", a crash
     # belongs to the nearest site within `radius_ft`.
     node_merge_ft: float = 60.0
+    # With "lion", every LION street segment (one block between two nodes) is also
+    # a site, and a crash not within `radius_ft` of an intersection belongs to the
+    # nearest segment within `radius_ft`. Intersection-only sites drop ~19% of KSI
+    # crashes, where mid-block speed cameras can sit.
+    midblock: bool = True
 
 
 @dataclass(frozen=True)
