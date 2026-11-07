@@ -27,6 +27,7 @@ FACTOR_COLUMNS = [f"contributing_factor_vehicle_{i}" for i in range(1, 6)]
 CRASH_COLUMNS = [
     "collision_id",
     "crash_date",
+    "crash_time",
     "latitude",
     "longitude",
     "borough",
@@ -41,12 +42,20 @@ def clean_crashes(raw: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
     """Cast SODA strings to types and keep crashes on or after `config.start_date`.
 
     Missing injury/death counts stay NA; they are not filled with zero.
+    `crash_hour` is the hour of `crash_time`, NA if the time is unknown.
     """
     df = raw.copy()
     df["collision_id"] = pd.to_numeric(df["collision_id"]).astype("int64")
     df["crash_date"] = pd.to_datetime(df["crash_date"]).dt.normalize()
     for col in ["latitude", "longitude"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "crash_time" in df:
+        unknown = df["crash_time"].isin(config.unknown_crash_times)
+        hour = pd.to_numeric(df["crash_time"].str.split(":").str[0], errors="coerce")
+        df["crash_hour"] = hour.mask(unknown).astype("Int64")
+        log.info(
+            "clean_crashes: %d crashes with unknown time", df["crash_hour"].isna().sum()
+        )
     for col in COUNT_COLUMNS:
         if col in df:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")

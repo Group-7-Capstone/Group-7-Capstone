@@ -13,10 +13,13 @@ from preprocessing.crashes import (
     flag_ksi,
 )
 from preprocessing.panel import (
+    FEATURE_SETS,
     add_camera_flags,
     add_lag_features,
     add_log1p_features,
+    add_recent_change,
     add_site_features,
+    add_temporal_features,
     append_scoring_year,
     count_site_years,
     drop_mixed_definition_years,
@@ -146,6 +149,7 @@ def _site_crashes(rows):
             "rlr": df["ksi"],
             "rear_end": False,
             "angle": False,
+            "crash_hour": pd.array([12] * len(df), dtype="Int64"),
         }
     )
 
@@ -392,3 +396,59 @@ def test_site_features_flag_midblock_and_log_length_only_there():
 
     assert out["midblock"].tolist() == [0, 1]
     assert out["log_block_length"].tolist() == [0.0, np.log(400.0)]
+
+
+def test_history_and_crash_type_features_come_out_of_the_panel_steps():
+    config = PanelConfig(first_year=2017, last_year=2020, lag_years=3)
+    crashes = _site_crashes([(0, "2017-05-01", True, 1, 0)])
+    counts = count_site_years(crashes, pd.DataFrame({"site_id": [0]}), config)
+
+    rows = add_log1p_features(add_lag_features(counts, config))
+
+    for name in ["history", "crash_types"]:
+        assert set(FEATURE_SETS[name]) <= set(rows.columns), name
+
+
+def test_crash_hour_parsed_and_placeholder_midnight_is_unknown():
+    raw = pd.DataFrame(
+        {
+            "collision_id": ["1", "2", "3"],
+            "crash_date": ["2020-01-01T00:00:00.000"] * 3,
+            "crash_time": ["0:00", "23:15", "7:05"],
+            "latitude": ["40.7"] * 3,
+            "longitude": ["-73.9"] * 3,
+        }
+    )
+
+    out = clean_crashes(raw, CONFIG)
+
+    assert pd.isna(out["crash_hour"].iloc[0])
+    assert out["crash_hour"].iloc[1:].tolist() == [23, 7]
+
+
+def test_temporal_features_use_only_the_lag_window():
+    config = PanelConfig(first_year=2017, last_year=2020, lag_years=3)
+    crashes = _site_crashes(
+        [
+            (0, "2017-05-06", False, 0, 0),  # Saturday
+            (0, "2018-05-01", False, 0, 0),
+            (0, "2019-05-01", False, 0, 0),
+            (0, "2019-05-02", False, 0, 0),
+            (0, "2020-05-01", False, 0, 0),  # outcome year: never a feature
+        ]
+    )
+    crashes.loc[1, "crash_hour"] = 23  # night
+    crashes.loc[2, "crash_hour"] = pd.NA  # unknown time
+    sites = pd.DataFrame({"site_id": [0, 1]})
+    counts = add_recent_change(count_site_years(crashes, sites, config))
+
+    rows = add_temporal_features(add_lag_features(counts, config), config)
+    by_site = rows[rows["year"] == 2020].set_index("site_id")
+
+    assert by_site.loc[0, "night_share"] == 1 / 3  # 1 of 3 known-time crashes
+    assert by_site.loc[0, "weekend_share"] == 1 / 4
+    assert np.isclose(by_site.loc[0, "recent_change"], np.log1p(2) - np.log1p(1))
+    assert by_site["no_history"].tolist() == [0, 1]
+    assert by_site.loc[
+        1, ["night_share", "weekend_share", "recent_change"]
+    ].tolist() == [0, 0, 0]

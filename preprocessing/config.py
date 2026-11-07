@@ -33,6 +33,10 @@ class CrashConfig:
         "Apparent Death",
     )
 
+    # Crash times recorded as exactly these are treated as unknown: "0:00" appears
+    # 4-6x as often as nearby minutes (1.7% of crashes), so it is mostly a placeholder.
+    unknown_crash_times: tuple[str, ...] = ("0:00",)
+
     # Crash types. A crash is red-light running (RLR) if any vehicle's contributing
     # factor is this value (a proxy: it also covers stop signs and other controls).
     rlr_factor: str = "Traffic Control Disregarded"
@@ -95,6 +99,9 @@ class PanelConfig:
     # prediction years whose whole lag window starts on or after this year are kept,
     # so every KSI-based feature uses one definition.
     ksi_definition_start: int = 2019
+    # Night is a crash hour >= the first value or < the second (local clock time,
+    # not darkness): 22:00-05:59.
+    night_hours: tuple[int, int] = (22, 6)
     # A camera belongs to the nearest site centroid within this many feet.
     camera_radius_ft: float = 150.0
 

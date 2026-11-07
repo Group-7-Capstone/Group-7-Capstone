@@ -1,7 +1,9 @@
 """Temporal validation of any count model (see `model/base.py`) on the site x year panel.
 
-For each test year T the model is fit on all rows with year < T and scored on
-year T (an expanding window).
+The team standard is `pooled_holdout`: fit once on years before
+`ValidationConfig.test_years` and score each site's total over that window.
+`evaluate` is the older expanding window: for each test year T the model is fit
+on all rows with year < T and scored on year T.
 """
 
 from collections.abc import Callable, Iterator
@@ -16,8 +18,9 @@ from model.base import CountModel
 
 @dataclass(frozen=True)
 class ValidationConfig:
-    # Test years must be on or after the site build cutoff (SiteConfig.build_end).
-    test_years: tuple[int, ...] = (2024, 2025)
+    # The pooled test window. With crash-cluster sites, test years must be on or
+    # after the site build cutoff (SiteConfig.build_end); LION sites have none.
+    test_years: tuple[int, ...] = (2023, 2024, 2025)
     top_k: tuple[int, ...] = (50, 100, 250, 500, 1000)
     # Calibration bins as quantiles of predicted risk. They narrow toward the top,
     # where watch lists are drawn, so over-predicted top sites can't hide inside a
@@ -157,8 +160,8 @@ def evaluate(
 def pooled_holdout(
     make_model: Callable[[], CountModel],
     panel: pd.DataFrame,
-    test_years: tuple[int, ...],
-    top_k: tuple[int, ...],
+    test_years: tuple[int, ...] = ValidationConfig.test_years,
+    top_k: tuple[int, ...] = ValidationConfig.top_k,
     y_col: str = "ksi",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Fit once on years before the test window and evaluate each site's total
