@@ -151,3 +151,34 @@ def test_add_roadway_features_fills_and_flags_missing():
     assert out["roadway_missing"].tolist() == [0, 0, 0, 1]
     assert out["legs_4"].tolist() == [1, 1, 0, 0]
     assert out["speed_30_35"].tolist() == [1, 1, 0, 0]
+
+
+def test_protected_bike_lane_needs_a_class_i_code():
+    raw = _raw_segments()
+    raw.loc[0:1, "BikeLane"] = " 2"  # A St: striped lane only
+    raw.loc[4, "BikeLane"] = " 9"  # one B Ave roadbed: Class II and I
+    seg = clean_segments(raw, CONFIG)
+    out = site_segment_features(
+        match_segments(_sites(), seg, CONFIG), CONFIG
+    ).set_index("site_id")
+    assert out.loc[0, "bike_lane"] and out.loc[0, "protected_bike_lane"]
+    assert out.loc[1, "bike_lane"] and not out.loc[1, "protected_bike_lane"]
+
+
+def test_add_roadway_features_matches_site_and_year_when_given():
+    seg = clean_segments(_raw_segments(), CONFIG)
+    sites = _sites()
+    one = site_intersection_features(
+        sites, find_intersections(seg, _nodes(), CONFIG), CONFIG
+    ).merge(
+        site_segment_features(match_segments(sites, seg, CONFIG), CONFIG), how="left"
+    )
+    roadway = pd.concat(
+        [
+            one.assign(year=2024),
+            one.assign(year=2025, one_way=one["site_id"].eq(1)),  # A St made one-way
+        ]
+    )
+    panel = pd.DataFrame({"site_id": [1, 1], "year": [2024, 2025]})
+    out = add_roadway_features(panel, roadway)
+    assert out["one_way"].tolist() == [0, 1]
