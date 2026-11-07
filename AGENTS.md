@@ -6,7 +6,7 @@ These rules apply to every coding session. Project background is in `README.md`.
 `data/ → preprocessing/ → model/ → validation/`
 - **data/** collects raw data only. **preprocessing/** makes every transformation. **model/** only fits models: no train/test splits and no validation. **validation/** takes any model plus validation data and returns metrics, and it owns splits, metrics and QA/QC.
 - Each layer reads only from the layer before it through importable code (e.g. `data/reader.py`). Shared code for a layer goes in its `base.py`.
-- Notebooks in `eda/` and `experiments/` import layer code and never redefine it. EDA doesn't belong in any layer.
+- Notebooks in `eda/`, `experiments/` and `midterm-report/` import layer code and never redefine it. EDA doesn't belong in any layer.
 
 ## Coding rules
 1. Use the existing `base.py` interfaces. Don't add new abstractions (base classes, wrappers, config systems) unless the issue asks for them.
