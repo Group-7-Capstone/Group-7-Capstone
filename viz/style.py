@@ -33,7 +33,8 @@ def use_style() -> None:
         "text.color": INK, "axes.labelcolor": INK_2,
         "xtick.color": INK_2, "ytick.color": INK_2, "axes.edgecolor": MUTED,
         "axes.spines.top": False, "axes.spines.right": False,
-        "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6,
+        "axes.grid": True, "axes.axisbelow": True,  # grid behind the data
+        "grid.color": GRID, "grid.linewidth": 0.6,
         "axes.prop_cycle": plt.cycler(color=CATEGORICAL),
         "lines.linewidth": 2, "lines.markersize": 4.5,
         "figure.facecolor": SURFACE, "axes.facecolor": SURFACE,
