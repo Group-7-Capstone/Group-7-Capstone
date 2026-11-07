@@ -8,7 +8,11 @@ describes the site:
 - Cross-section: travel lanes and curb-to-curb width of the biggest street at the
   site, summed across a street's roadbeds (a pedestrian crossing a divided avenue
   crosses both), and the median estimated lane width.
-- Posted speed limit, one-way streets, highways/ramps, bike lanes and truck routes.
+- Posted speed limit, one-way streets, highways/ramps, bike lanes (any, and
+  protected) and truck routes.
+
+`load_roadway_features_by_year` reads each prediction year's features from the
+LION release in effect then (`RoadwayConfig.release_by_year`).
 
 Sites with no LION street within the radius get NA site features;
 `add_roadway_features` turns them into model-ready columns.
@@ -66,6 +70,7 @@ ROADWAY_FEATURES = [
     "one_way",
     "highway",
     "bike_lane",
+    "protected_bike_lane",
     "truck_route",
     "roadway_missing",
 ]
@@ -200,6 +205,7 @@ def site_segment_features(pairs: pd.DataFrame, config: RoadwayConfig) -> pd.Data
         one_way=pairs["SegmentTyp"].eq("U") & pairs["TrafDir"].isin(["W", "A"]),
         highway=pairs["RW_TYPE"].isin(config.highway_rw_types),
         bike_lane=pairs["BikeLane"].notna(),
+        protected_bike_lane=pairs["BikeLane"].isin(config.protected_bike_codes),
         truck_route=pairs["TRUCK_ROUTE_TYPE"].notna(),
     )
     by_site = pairs.groupby("site_id")
@@ -210,6 +216,7 @@ def site_segment_features(pairs: pd.DataFrame, config: RoadwayConfig) -> pd.Data
         one_way=("one_way", "any"),
         highway=("highway", "any"),
         bike_lane=("bike_lane", "any"),
+        protected_bike_lane=("protected_bike_lane", "any"),
         truck_route=("truck_route", "any"),
     )
     out["lanes"] = (
@@ -225,17 +232,19 @@ def load_roadway_features(
     sites: pd.DataFrame,
     config: RoadwayConfig | None = None,
     site_config: SiteConfig | None = None,
+    release: str | None = None,
 ) -> pd.DataFrame:
     """Read LION and return one row of roadway features per site in `sites`.
 
     `sites` needs `site_id` and projected `x`, `y` in `SiteConfig.crs`, as
-    returned by `preprocessing.panel.load_panel`.
+    returned by `preprocessing.panel.load_panel`. `release` picks the LION
+    release (see `data.reader.read_lion`).
     """
     config = config or RoadwayConfig()
     site_config = site_config or SiteConfig()
-    segments = clean_segments(read_lion("lion", SEGMENT_COLUMNS), config)
+    segments = clean_segments(read_lion("lion", SEGMENT_COLUMNS, release), config)
     segments = segments.to_crs(site_config.crs)
-    nodes = read_lion("node", ["NODEID"]).to_crs(site_config.crs)
+    nodes = read_lion("node", ["NODEID"], release).to_crs(site_config.crs)
 
     intersections = site_intersection_features(
         sites, find_intersections(segments, nodes, config), config
@@ -251,8 +260,25 @@ def load_roadway_features(
     return out
 
 
+def load_roadway_features_by_year(
+    sites: pd.DataFrame,
+    config: RoadwayConfig | None = None,
+    site_config: SiteConfig | None = None,
+) -> pd.DataFrame:
+    """`load_roadway_features` once per `release_by_year` entry, with a `year` column."""
+    config = config or RoadwayConfig()
+    return pd.concat(
+        [
+            load_roadway_features(sites, config, site_config, release).assign(year=year)
+            for year, release in config.release_by_year
+        ],
+        ignore_index=True,
+    )
+
+
 def add_roadway_features(panel: pd.DataFrame, roadway: pd.DataFrame) -> pd.DataFrame:
-    """Add the model-ready `ROADWAY_FEATURES` to `panel` by `site_id`.
+    """Add the model-ready `ROADWAY_FEATURES` to `panel` by `site_id`, and by
+    `year` too if `roadway` has one (from `load_roadway_features_by_year`).
 
     Missing numbers are filled with the median over sites and flagged together in
     `roadway_missing`, so no site-year is dropped. Legs and speed limit become
@@ -260,7 +286,8 @@ def add_roadway_features(panel: pd.DataFrame, roadway: pd.DataFrame) -> pd.DataF
     the citywide default.
     """
     numeric = ["lanes", "width_ft", "lane_width_ft", "speed_limit"]
-    site = roadway.set_index("site_id")
+    key = ["site_id", "year"] if "year" in roadway else ["site_id"]
+    site = roadway.set_index(key)
     missing = site[numeric].isna().any(axis=1)
     filled = site[numeric].fillna(site[numeric].median())
     speed = filled["speed_limit"]
@@ -279,6 +306,9 @@ def add_roadway_features(panel: pd.DataFrame, roadway: pd.DataFrame) -> pd.DataF
             "one_way": site["one_way"].fillna(False).astype(bool),
             "highway": site["highway"].fillna(False).astype(bool),
             "bike_lane": site["bike_lane"].fillna(False).astype(bool),
+            "protected_bike_lane": site["protected_bike_lane"]
+            .fillna(False)
+            .astype(bool),
             "truck_route": site["truck_route"].fillna(False).astype(bool),
             "roadway_missing": missing,
         }
@@ -288,4 +318,4 @@ def add_roadway_features(panel: pd.DataFrame, roadway: pd.DataFrame) -> pd.DataF
         missing.sum(),
         len(site),
     )
-    return panel.merge(features, left_on="site_id", right_index=True, how="left")
+    return panel.merge(features, left_on=key, right_index=True, how="left")

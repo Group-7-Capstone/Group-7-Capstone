@@ -128,6 +128,19 @@ class RoadwayConfig:
     parking_lane_ft: float = 8.0
     # Estimated lane widths outside this range are treated as data errors (NA).
     lane_width_bounds_ft: tuple[float, float] = (7.0, 20.0)
+    # LION `BikeLane` codes that include a Class I (separated) facility: 1 Class I,
+    # 5 I+II, 8 I+III, 9 II+I, 10 III+I (from the LION metadata).
+    protected_bike_codes: tuple[str, ...] = ("1", "5", "8", "9", "10")
+    # Year-matched road features: each prediction year reads the last LION release
+    # published before Jan 1 of that year, so no later road change describes it
+    # (22d was never published). Sites themselves come from `data.reader.LION_PATH`.
+    release_by_year: tuple[tuple[int, str], ...] = (
+        (2022, "21d"),
+        (2023, "22c"),
+        (2024, "23d"),
+        (2025, "24d"),
+        (2026, "25d"),
+    )
 
 
 @dataclass(frozen=True)

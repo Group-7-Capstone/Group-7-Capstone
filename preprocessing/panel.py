@@ -61,7 +61,12 @@ TEMPORAL_FEATURES = ["night_share", "weekend_share", "recent_change", "no_histor
 FEATURE_SETS = {
     "history": HISTORY_FEATURES,
     "crash_types": CRASH_TYPE_FEATURES,
-    "road": ROADWAY_FEATURES,  # after `roadway.add_roadway_features`
+    # After `roadway.add_roadway_features`. Bike lanes are left out: lanes are often
+    # built where serious crashes happened, so they're tested separately (#48).
+    "road": [
+        f for f in ROADWAY_FEATURES if f not in ("bike_lane", "protected_bike_lane")
+    ],
+    "bike": ["bike_lane", "protected_bike_lane"],
     "site": SITE_FEATURES,
     "temporal": TEMPORAL_FEATURES,
 }

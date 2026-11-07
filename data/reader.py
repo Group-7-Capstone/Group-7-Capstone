@@ -5,10 +5,11 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from data.base import get_connection
+from data.base import get_connection, lion_release_dir
 
 CAMERA_DATA_DIR = Path(__file__).resolve().parent / "camera_data"
-# DCP's LION street centerline file geodatabase, downloaded by hand (git-ignored).
+# DCP's LION street centerline file geodatabase, release 26c, downloaded by hand
+# (git-ignored). Other releases come from `download.download_lion`.
 LION_PATH = Path(__file__).resolve().parent / "lion" / "lion.gdb"
 
 
@@ -27,9 +28,21 @@ def read_camera_data(name: str) -> pd.DataFrame:
     return pd.read_csv(CAMERA_DATA_DIR / f"{name}.csv")
 
 
-def read_lion(layer: str, columns: list[str] | None = None) -> pd.DataFrame:
+def read_lion(
+    layer: str, columns: list[str] | None = None, release: str | None = None
+) -> pd.DataFrame:
     """Return a LION layer as-is ("lion" segments or "node" points, EPSG:2263).
 
-    Layers with geometry come back as a GeoDataFrame.
+    `release` (e.g. "22c") reads a release from `download.download_lion`; None
+    reads `LION_PATH`. Layers with geometry come back as a GeoDataFrame.
     """
-    return gpd.read_file(LION_PATH, layer=layer, columns=columns, engine="pyogrio")
+    path = (
+        LION_PATH
+        if release is None
+        else lion_release_dir(release) / "lion" / "lion.gdb"
+    )
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} not found; run data.download.download_lion({release!r})"
+        )
+    return gpd.read_file(path, layer=layer, columns=columns, engine="pyogrio")
