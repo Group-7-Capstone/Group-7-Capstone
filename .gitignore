@@ -28,3 +28,4 @@ data/lion/
 
 # Generated experiment outputs (risk tables, local report site)
 experiments/outputs/
+midterm-report/outputs/
