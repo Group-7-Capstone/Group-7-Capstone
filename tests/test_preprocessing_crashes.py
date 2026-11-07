@@ -452,3 +452,13 @@ def test_temporal_features_use_only_the_lag_window():
     assert by_site.loc[
         1, ["night_share", "weekend_share", "recent_change"]
     ].tolist() == [0, 0, 0]
+
+
+def test_site_features_work_for_intersection_only_sites():
+    sites = pd.DataFrame({"site_id": [0, 1], "midblock": [False, False]})
+    panel = pd.DataFrame({"site_id": [0, 1], "year": [2023, 2023]})
+
+    out = add_site_features(panel, sites)
+
+    assert out["midblock"].tolist() == [0, 0]
+    assert out["log_block_length"].tolist() == [0.0, 0.0]

@@ -298,9 +298,11 @@ def build_lion_sites(
 
 def add_site_features(panel: pd.DataFrame, sites: pd.DataFrame) -> pd.DataFrame:
     """Add `SITE_FEATURES` by `site_id`: `midblock` (0/1) and `log_block_length`
-    (log feet, at least 1 ft; 0 for intersections, so it only acts mid-block)."""
-    midblock = sites.set_index("site_id")["midblock"]
-    length = sites.set_index("site_id")["length_ft"].clip(lower=1)
+    (log feet, at least 1 ft; 0 for intersections, so it only acts mid-block).
+    Intersection-only sites (`SiteConfig.midblock=False`) have no `length_ft`."""
+    site = sites.set_index("site_id")
+    midblock = site["midblock"]
+    length = site.get("length_ft", pd.Series(np.nan, index=site.index)).clip(lower=1)
     out = panel.assign(midblock=panel["site_id"].map(midblock).astype(int))
     log_length = np.log(panel["site_id"].map(length)).fillna(0.0)
     return out.assign(log_block_length=log_length.where(out["midblock"] == 1, 0.0))
