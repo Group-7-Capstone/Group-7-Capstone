@@ -13,7 +13,7 @@ CATEGORICAL = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")
 # Roles: our model, what it is compared with, a third series.
 MODEL, COMPARISON, THIRD = CATEGORICAL[:3]
 INK, INK_2, MUTED = "#0b0b0b", "#52514e", "#898781"  # titles, labels, reference lines
-SURFACE, GRID = "#fcfcfb", "#e1e0d9"
+SURFACE, GRID = "#ffffff", "#e1e0d9"
 # Magnitude: one hue, light to dark. Polarity: blue and red around a gray midpoint.
 SEQUENTIAL = LinearSegmentedColormap.from_list("team_blue", ["#cde2fb", "#2a78d6", "#0d366b"])
 DIVERGING = LinearSegmentedColormap.from_list("team_div", ["#2a78d6", "#f0efec", "#e34948"])
