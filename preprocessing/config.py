@@ -87,6 +87,26 @@ class RoadwayConfig:
 
 
 @dataclass(frozen=True)
+class IntersectionConfig:
+    # A divided road meets a cross street at several LION nodes; intersection nodes
+    # closer than this (chained) are one intersection. Typical NYC blocks are 200+ ft.
+    merge_ft: float = 50.0
+    # A crash belongs to the nearest intersection within this many feet (same radius
+    # as SiteConfig.radius_ft); crashes farther from every intersection are left out.
+    crash_radius_ft: float = 100.0
+
+
+@dataclass(frozen=True)
+class TrafficVolumeConfig:
+    # Raw DOT Automated Traffic Volume Counts (7ym2-wayt), 15-minute counts per LION
+    # segment and direction, pulled for 2014 onward.
+    table: str = "traffic_volume_counts"
+    # A count day is used only if it has every 15-minute interval; the first and last
+    # days of a count study are usually partial.
+    intervals_per_day: int = 96
+
+
+@dataclass(frozen=True)
 class CameraDirectionConfig:
     # Raw camera ticket tables (one per fiscal year), already filtered to camera
     # violation codes at pull time.
