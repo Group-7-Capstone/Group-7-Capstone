@@ -11,10 +11,56 @@
 | Design-only risk map | `preprocessing/intersections.py` | `q2_design_risk_map.ipynb` |
 | Camera directions and locations | `preprocessing/camera_directions.py`, `camera_locations.py` | `data/camera_data/camera_directions.csv` |
 
-Key results so far:
-- Crash history ranks next year's KSI sites best, and adding road attributes or traffic volume doesn't improve that ranking.
-- Road design still explains risk, and not just through traffic. A 4-way intersection has 2.7× the KSI of a mid-block site, with crash history held equal.
-- At intersections with no crash at all in the prior 3 years, design alone finds 21% of their next-year KSI crashes in its top 1,000, against 9% for random picks.
+### Q2 findings so far (details in `q2_roadway_attributes.md`)
+- **Crash history ranks best.** It ranks next year's KSI sites best. Adding road attributes doesn't change the top-1,000 capture (15.8% both ways), because past crashes already reflect a site's design.
+- **Road design still explains risk.** A 4-way intersection has 2.7× the KSI of a mid-block site, with crash history held equal. Truck routes, bike lanes, more lanes and wider streets are riskier; one-way streets are slightly safer.
+- **It isn't just traffic.** On the 3% of sites with DOT traffic counts, adding volume leaves the design effects essentially unchanged. Only the truck route effect weakens.
+
+## How the risk map works
+
+**The problem:** Q1 and Q2 rank *crash sites*, which are built from crash locations. Places that never had a crash aren't in the data, and crash history can't flag a place without a record.
+
+**The approach:**
+1. **Units:** every LION intersection, meaning every node where 3+ streets meet. Nodes within 50 ft of each other are merged, since a divided road meets a cross street at several nodes. That gives 41,897 intersections, crashed or not.
+2. **Crash assignment:** each crash goes to the nearest intersection within 100 ft. Intersections with no crashes keep zeros, so the model sees safe places too. The panel steps are the same as Q1's: yearly counts, 3-year lags, 2022–2025.
+3. **Design model:** a negative binomial model learns how expected KSI depends on road attributes alone (legs, lanes, width, lane width, speed limit, one-way, highway, bike lane, truck route). It then scores every intersection, so one that looks like the dangerous ones scores high even with no crashes. Road-safety engineers call this a *safety performance function*.
+4. **Testing:** the same expanding-window validation as Q1: fit on earlier years and score 2024 and 2025. Every model is also scored only on intersections with **no KSI** in the prior 3 years, and only on those with **no crash at all**.
+
+## Risk map findings
+
+| Intersections scored | Crash history (Q1 model) | Design only | Random picks |
+|---|---|---|---|
+| All intersections | 18.7% | 9.9% | 2.4% |
+| No KSI in prior 3 years | 17.6% | 10.7% | 2.7% |
+| No crash at all in prior 3 years | 8.9% | **21.3%** | 8.9% |
+
+*Share of next year's KSI crashes at each model's top 1,000 intersections, averaged over 2024 and 2025.*
+
+- **Most severe crashes happen where there was no recent severe crash.**
+  - 85% of intersections had no KSI crash in 2022–2025.
+  - 63% of KSI crashes happened at an intersection with no KSI in the 3 years before: 60% where there were minor crashes, and 3% where there was no crash at all.
+- **Overall, crash history still ranks best.** Design alone captures about half as much, which is still about 4× random. Combining them doesn't improve the ranking (18.4%).
+- **With no crash at all, design is the only signal, and it works.** Crash history has nothing to go on there, so it does no better than random. Design does 2.4× better than random. Few KSI crashes happen at such places (about 85 a year), so the gain is about 10 more KSI crashes a year found in the top 1,000.
+- **With minor crashes but no KSI, the minor crashes are the better warning.** Crash history does 17.6%, design 10.7%.
+- **What makes an intersection risky by design,** compared with a 3-way intersection where noted:
+
+  | Attribute | Multiplier on expected KSI |
+  |---|---|
+  | Truck route | 2.0× |
+  | 5+ legs (vs. 3-way) | 2.8× |
+  | 4 legs (vs. 3-way) | 2.3× |
+  | Bike lane (likely more cyclists) | 1.6× |
+  | Each extra travel lane | 1.25× |
+  | Posted 40+ mph (few pedestrians) | 0.5× |
+- **The map:** 334 of the 1,000 riskiest intersections by design had no KSI crash in 2019–2025.
+  - Many are on wide arterials (Queens Boulevard, Merrick Boulevard, Francis Lewis Boulevard) and have plenty of minor crashes.
+  - Parts of Queens Boulevard were redesigned by DOT in recent years, which may explain their drop in severe crashes.
+  - Some are highway crossings, likely false positives (next step 1).
+- **Cautions:**
+  - LION is a 2026 snapshot, so a recent redesign is treated as always there.
+  - There's no traffic volume citywide.
+  - These are associations, not causes.
+  - Only two test years, and the no-crash group has few KSI crashes, so its numbers are noisy.
 
 ## Setting up on another laptop
 
