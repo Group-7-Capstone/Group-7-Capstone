@@ -20,6 +20,7 @@ CONFIG = RoadwayConfig()
 
 def _segment(street, seg_type, traf_dir, nodes, line, lanes="  ", width=None, **kw):
     return {
+        "SegmentID": kw.get("segment_id", f"{nodes[0]:03d}{nodes[1]:03d}"),
         "Street": street,
         "FeatureTyp": kw.get("feature", "0"),
         "SegmentTyp": seg_type,
@@ -98,6 +99,12 @@ def test_find_intersections_counts_generic_legs():
     # only node 2 has 3+ generic legs; the path to node 10 was dropped
     assert found["node_id"].tolist() == [2]
     assert found["legs"].tolist() == [4]
+
+
+def test_find_intersections_counts_a_repeated_segment_once():
+    raw = _raw_segments()
+    seg = clean_segments(pd.concat([raw, raw.iloc[[0]]], ignore_index=True), CONFIG)
+    assert find_intersections(seg, _nodes(), CONFIG)["legs"].tolist() == [4]
 
 
 def test_site_intersection_features_uses_radius():

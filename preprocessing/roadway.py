@@ -27,6 +27,7 @@ from preprocessing.config import RoadwayConfig, SiteConfig
 log = logging.getLogger(__name__)
 
 SEGMENT_COLUMNS = [
+    "SegmentID",
     "FeatureTyp",
     "SegmentTyp",
     "RW_TYPE",
@@ -107,6 +108,8 @@ def find_intersections(
     breaks along one street, not intersections.
     """
     generic = segments[segments["SegmentTyp"].isin(config.generic_segment_types)]
+    # LION repeats some segments on several rows; each is one leg.
+    generic = generic.drop_duplicates("SegmentID")
     legs = pd.concat([generic["NodeIDFrom"], generic["NodeIDTo"]]).value_counts()
     out = pd.DataFrame(
         {

@@ -354,7 +354,7 @@ def load_camera_directions(
         enforced_approaches(combine_locations(parts), config), located
     )
     segments = clean_segments(
-        read_lion("lion", SEGMENT_COLUMNS + ["Street", "SegmentID"]), roadway_config
+        read_lion("lion", SEGMENT_COLUMNS + ["Street"]), roadway_config
     ).to_crs(site_config.crs)
     roadbeds = segments[
         segments["SegmentTyp"].isin(roadway_config.roadbed_segment_types)
