@@ -35,7 +35,7 @@ data/ → preprocessing/ → model/ → validation/
  speed camera tickets ─┐                        │                              │    by site type
  DOT schedule ─────────┴──► activation dates ───┤                              │    (EB before–after,
                             + locations         │                              │     robustness checks)
- school locations ─────────► eligible sites ────┼──► comparison group ─────────┘            │
+                                                ├──► comparison group ─────────┘            │
                                                 │                                           ▼
                                                 └──► B. KSI risk at candidates ──► D. Benefit = risk × effect
                                                                                             │
@@ -44,11 +44,11 @@ data/ → preprocessing/ → model/ → validation/
                                                                                       + stress test
                                                                                       + equity report
 ```
-- **A. Baseline:** expected crashes at a site without a camera, from a model fit on comparable school-zone sites without cameras and combined with the site's own history (Empirical Bayes).
+- **A. Baseline:** expected crashes at a site without a camera, from a model fit on comparison sites (sites without a camera, excluding those near one) and combined with the site's own history (Empirical Bayes).
 - **B. Risk:** expected KSI at candidate sites (the KSI model below).
 - **C. Effect:** crashes after activation compared with A, grouped by site type. Checks: staggered rollout, enforced vs. unenforced hours, the August 2022 switch to 24/7, and several activation definitions.
-- **D. Benefit:** B × C, the KSI a camera is expected to prevent at each eligible site.
-- **E. Placement:** compare uniform, most-dangerous-first, status quo and risk × effect. The stress test shrinks how much C varies by site type, and the equity report shows who gets cameras under each rule. Census data is used only here, not as a model feature.
+- **D. Benefit:** B × C, the KSI a camera is expected to prevent at each site without a camera.
+- **E. Placement:** compare uniform, most-dangerous-first, status quo and risk × effect. The stress test shrinks how much C varies by site type, and the equity report shows who gets cameras under each rule. Census data is used only here, not as a model feature. We don't filter sites by school zone: a ¼-mile radius around schools covers most of the city, and public school data is incomplete. The output is a ranked list that DOT screens for zone eligibility and the 750-zone cap.
 
 Which layer holds D and E is still open (see `CURRENT_STATUS.md`).
 
