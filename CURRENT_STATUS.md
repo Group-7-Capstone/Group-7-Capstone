@@ -14,7 +14,7 @@ DOT agreed (Nov 2026) that we focus on **speed cameras**. About 3,000 speed came
 | KSI risk model | `NegativeBinomialModel` with top-k and calibration validation (midterm notebook) | Done. Still to do: exclude or flag sites that already have a camera, so risk means "without a camera" |
 | Speed-camera activation dates | `camera_activation_dates.csv` | Needs a speed-specific rule (see below) |
 | Speed-camera locations | `camera_locations.py`, `camera_directions.py` | Needs a location check (see below) |
-| Eligible sites and comparison group | Sites near schools, without cameras | To do |
+| Comparison group | Sites without cameras, minus a buffer around cameras (#27) | To do |
 | Baseline | Model fit on comparison sites using site features only (no crash history), then Empirical Bayes expected crashes for camera sites with yearly adjustment factors | To do |
 | Camera effect | EB before–after at camera sites, grouped by 3–4 site types chosen in advance. Checks: staggered rollout; enforced vs. unenforced hours; the August 2022 switch to 24/7 | To do |
 | Placement comparison | Benefit = risk × effect. Compare uniform, most-dangerous-first, status quo and risk × effect, with a stress test that shrinks the differences in effect between site types | To do |
@@ -28,7 +28,7 @@ DOT agreed (Nov 2026) that we focus on **speed cameras**. About 3,000 speed came
 - **Spillover:** speed cameras slow a whole corridor, so leave sites near a camera out of the comparison group (#27, #28).
 
 ## Things to verify
-- **School zones:** there's no public list of the 750 camera school zones. NYC Open Data has school points (e.g. `wg9x-4ke6`, 2019–20 School Locations, public schools only), and the "School Zones 2024-2025" datasets are attendance zones, not speed zones. Ask DOT for the zone list, how many of the 750 zones are in use, and whether the cap changed after 2022.
+- **School zones:** we don't filter sites by school zone. A ¼-mile radius around schools covers most of the city, there's no public list of the 750 camera zones, and public school data is incomplete. Placement produces a ranked list that DOT screens for eligibility at the end. Still worth asking DOT how many of the 750 zones are in use and whether the cap changed after 2022, since that sets how many new cameras are realistic.
 - **Weekly camera-effect model:** README mentions one in `eric/`, but it isn't on `main` or `eric-eda`. Ask Eric.
 - **Red light camera activations:** 414 of 617 are dated 2025–26, which looks like a gap in ticket coverage rather than new installs. Confirm with DOT.
 
