@@ -8,21 +8,36 @@ served from there instead of hitting the API again, unless `force=True`.
 import json
 import os
 import shutil
+import tempfile
+import zipfile
 from collections.abc import Iterator
 from datetime import datetime, timezone
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import requests
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from sodapy import Socrata
 from tqdm import tqdm
 from urllib3.util.retry import Retry
-from data.base import PROVENANCE_TABLE, get_connection, parquet_path
+
+from data.base import (
+    PROVENANCE_TABLE,
+    get_connection,
+    lion_release_dir,
+    parquet_path,
+)
 
 load_dotenv()
 
 SOCRATA_DOMAIN = "data.cityofnewyork.us"
+# Every DCP LION release, e.g. "22c" (listed on nyc.gov/content/planning/pages/
+# resources/datasets/lion, which blocks scripted access; the files don't).
+LION_URL = (
+    "https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/lion/"
+    "nyclion_{release}.zip"
+)
 
 
 def _client() -> Socrata:
@@ -163,3 +178,37 @@ def fetch_soda(
             con.close()
     finally:
         shutil.rmtree(parts_dir, ignore_errors=True)
+
+
+def download_lion(release: str, force: bool = False) -> None:
+    """Download and unzip a DCP LION release (e.g. "22c") into `lion_release_dir`.
+
+    Logs the release URL in `_provenance` as table `lion_<release>`. A release
+    already unzipped is kept unless `force=True`.
+    """
+    out_dir = lion_release_dir(release)
+    if out_dir.exists() and not force:
+        return
+    url = LION_URL.format(release=release)
+    shutil.rmtree(out_dir, ignore_errors=True)
+    with tempfile.TemporaryFile() as tmp:
+        with requests.get(url, stream=True, timeout=120) as response:
+            response.raise_for_status()
+            for chunk in response.iter_content(chunk_size=1 << 20):
+                tmp.write(chunk)
+        tmp.seek(0)
+        with zipfile.ZipFile(tmp) as archive:
+            archive.extractall(out_dir)
+
+    con = get_connection()
+    try:
+        table_name = f"lion_{release}"
+        con.execute(
+            f"DELETE FROM {PROVENANCE_TABLE} WHERE table_name = ?", [table_name]
+        )
+        con.execute(
+            f"INSERT INTO {PROVENANCE_TABLE} VALUES (?, ?, ?, ?)",
+            [table_name, "DCP LION", url, datetime.now(timezone.utc)],
+        )
+    finally:
+        con.close()

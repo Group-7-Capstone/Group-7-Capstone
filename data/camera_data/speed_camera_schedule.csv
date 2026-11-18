@@ -1,0 +1,4 @@
+start_date,end_date,hours_of_opp,days_of_opp,months_of_opp,permitted_zones
+2014-01-01,2019-06-30,7am-5pm,Mon-Fri,September-June,140
+2019-07-01,2022-07-31,6am-10pm,Mon-Fri,All,750
+2022-08-01,,All,All,All,750

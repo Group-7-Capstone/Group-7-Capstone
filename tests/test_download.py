@@ -1,5 +1,11 @@
-"""Tests for data/download.py's SODA pagination."""
+"""Tests for data/download.py: SODA pagination and LION releases."""
 
+import io
+import zipfile
+
+import duckdb
+
+from data import download
 from data.download import _fetch_pages
 
 
@@ -47,3 +53,44 @@ def test_fetch_pages_empty_result():
     )
 
     assert pages == []
+
+
+def test_download_lion_unzips_release_and_logs_provenance(tmp_path, monkeypatch):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("lion/lion.gdb/a00000001.gdbtable", b"x")
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield buffer.getvalue()
+
+    db = str(tmp_path / "cache.duckdb")
+    with duckdb.connect(db) as con:
+        con.execute(
+            "CREATE TABLE _provenance (table_name VARCHAR, dataset_id VARCHAR, "
+            "query VARCHAR, pulled_at TIMESTAMP)"
+        )
+    urls = []
+    monkeypatch.setattr(download, "lion_release_dir", lambda r: tmp_path / r)
+    monkeypatch.setattr(download, "get_connection", lambda: duckdb.connect(db))
+    monkeypatch.setattr(
+        download.requests, "get", lambda url, **kw: urls.append(url) or _Response()
+    )
+
+    download.download_lion("22c")
+    download.download_lion("22c")  # already there: no second download
+
+    assert (tmp_path / "22c" / "lion" / "lion.gdb" / "a00000001.gdbtable").exists()
+    assert urls == [download.LION_URL.format(release="22c")]
+    with duckdb.connect(db) as con:
+        logged = con.execute("SELECT table_name, query FROM _provenance").fetchall()
+    assert logged == [("lion_22c", urls[0])]

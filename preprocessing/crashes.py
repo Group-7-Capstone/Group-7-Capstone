@@ -1,4 +1,4 @@
-"""Clean raw crashes and flag killed-or-seriously-injured (KSI) crashes.
+"""Clean raw crashes, flag killed-or-seriously-injured (KSI) crashes and crash types.
 
 Each step takes and returns a DataFrame and logs how many rows it drops or changes.
 """
@@ -23,27 +23,39 @@ COUNT_COLUMNS = [
     "number_of_motorist_injured",
     "number_of_motorist_killed",
 ]
+FACTOR_COLUMNS = [f"contributing_factor_vehicle_{i}" for i in range(1, 6)]
 CRASH_COLUMNS = [
     "collision_id",
     "crash_date",
+    "crash_time",
     "latitude",
     "longitude",
     "borough",
     *COUNT_COLUMNS,
+    *FACTOR_COLUMNS,
 ]
 PERSON_COLUMNS = ["collision_id", "person_injury", "complaint", "emotional_status"]
+VEHICLE_COLUMNS = ["collision_id", "point_of_impact"]
 
 
 def clean_crashes(raw: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
     """Cast SODA strings to types and keep crashes on or after `config.start_date`.
 
     Missing injury/death counts stay NA; they are not filled with zero.
+    `crash_hour` is the hour of `crash_time`, NA if the time is unknown.
     """
     df = raw.copy()
     df["collision_id"] = pd.to_numeric(df["collision_id"]).astype("int64")
     df["crash_date"] = pd.to_datetime(df["crash_date"]).dt.normalize()
     for col in ["latitude", "longitude"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "crash_time" in df:
+        unknown = df["crash_time"].isin(config.unknown_crash_times)
+        hour = pd.to_numeric(df["crash_time"].str.split(":").str[0], errors="coerce")
+        df["crash_hour"] = hour.mask(unknown).astype("Int64")
+        log.info(
+            "clean_crashes: %d crashes with unknown time", df["crash_hour"].isna().sum()
+        )
     for col in COUNT_COLUMNS:
         if col in df:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
@@ -106,9 +118,50 @@ def flag_ksi(
     return out
 
 
+def flag_crash_types(
+    crashes: pd.DataFrame, vehicles: pd.DataFrame, config: CrashConfig
+) -> pd.DataFrame:
+    """Add boolean `rlr`, `rear_end` and `angle` to each crash.
+
+    `rlr`: any vehicle's contributing factor is `config.rlr_factor`. `rear_end`:
+    one vehicle was hit on its front and another on its back. `angle`: one was hit
+    on its front and another on its side, and the crash isn't rear-end. Crashes
+    with fewer than two vehicle records with a known impact point are neither.
+    """
+    factors = [c for c in FACTOR_COLUMNS if c in crashes]
+    rlr = crashes[factors].eq(config.rlr_factor).any(axis=1)
+
+    v = vehicles.copy()
+    v["collision_id"] = pd.to_numeric(v["collision_id"]).astype("int64")
+    impact = v["point_of_impact"]
+    v["front"] = impact.isin(config.front_impacts)
+    v["rear"] = impact.isin(config.rear_impacts)
+    v["side"] = impact.isin(config.side_impacts)
+    per_crash = v.groupby("collision_id")[["front", "rear", "side"]].sum()
+    rear_end = (per_crash["front"] >= 1) & (per_crash["rear"] >= 1)
+    angle = (per_crash["front"] >= 1) & (per_crash["side"] >= 1) & ~rear_end
+
+    ids = crashes["collision_id"]
+    out = crashes.assign(
+        rlr=rlr,
+        rear_end=ids.map(rear_end).fillna(False).astype(bool),
+        angle=ids.map(angle).fillna(False).astype(bool),
+    )
+    log.info(
+        "flag_crash_types: %d red-light-running, %d rear-end, %d angle of %d crashes",
+        out["rlr"].sum(),
+        out["rear_end"].sum(),
+        out["angle"].sum(),
+        len(out),
+    )
+    return out
+
+
 def load_crashes(config: CrashConfig | None = None) -> pd.DataFrame:
-    """Read raw crashes and persons, then clean, drop ungeocoded and flag KSI."""
+    """Read raw crashes, persons and vehicles, then clean, drop ungeocoded and flag
+    KSI and crash types."""
     config = config or CrashConfig()
     crashes = clean_crashes(read_table("crashes", CRASH_COLUMNS), config)
     crashes = drop_ungeocoded(crashes, config)
-    return flag_ksi(crashes, read_table("persons", PERSON_COLUMNS), config)
+    crashes = flag_ksi(crashes, read_table("persons", PERSON_COLUMNS), config)
+    return flag_crash_types(crashes, read_table("vehicles", VEHICLE_COLUMNS), config)

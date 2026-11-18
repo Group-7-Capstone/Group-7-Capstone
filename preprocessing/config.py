@@ -33,6 +33,34 @@ class CrashConfig:
         "Apparent Death",
     )
 
+    # Crash times recorded as exactly these are treated as unknown: "0:00" appears
+    # 4-6x as often as nearby minutes (1.7% of crashes), so it is mostly a placeholder.
+    unknown_crash_times: tuple[str, ...] = ("0:00",)
+
+    # Crash types. A crash is red-light running (RLR) if any vehicle's contributing
+    # factor is this value (a proxy: it also covers stop signs and other controls).
+    rlr_factor: str = "Traffic Control Disregarded"
+    # Vehicles table `point_of_impact` groups. Rear-end: one vehicle hit on its
+    # front, another on its back. Angle: one hit on its front, another on its side.
+    front_impacts: tuple[str, ...] = (
+        "Center Front End",
+        "Left Front Bumper",
+        "Right Front Bumper",
+    )
+    rear_impacts: tuple[str, ...] = (
+        "Center Back End",
+        "Left Rear Bumper",
+        "Right Rear Bumper",
+    )
+    side_impacts: tuple[str, ...] = (
+        "Left Front Quarter Panel",
+        "Right Front Quarter Panel",
+        "Left Side Doors",
+        "Right Side Doors",
+        "Left Rear Quarter Panel",
+        "Right Rear Quarter Panel",
+    )
+
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -44,6 +72,19 @@ class SiteConfig:
     # Sites are built only from crashes before this date, so held-out years
     # never define which sites exist. Test periods must start on or after it.
     build_end: str = "2024-01-01"
+    # "lion" (the team standard): LION intersections, plus mid-block sites if
+    # `midblock`. "crashes": peak-radius crash clusters (Q1, Q2). LION sites don't
+    # depend on crash dates, so `build_end` only limits crash clusters.
+    source: str = "lion"
+    # LION nodes of one intersection (divided roads meet at several nodes) within
+    # this many feet of each other are merged into one site. With "lion", a crash
+    # belongs to the nearest site within `radius_ft`.
+    node_merge_ft: float = 60.0
+    # With "lion", every LION street segment (one block between two nodes) is also
+    # a site, and a crash not within `radius_ft` of an intersection belongs to the
+    # nearest segment within `radius_ft`. Intersection-only sites drop ~19% of KSI
+    # crashes, where mid-block speed cameras can sit.
+    midblock: bool = True
 
 
 @dataclass(frozen=True)
@@ -58,6 +99,9 @@ class PanelConfig:
     # prediction years whose whole lag window starts on or after this year are kept,
     # so every KSI-based feature uses one definition.
     ksi_definition_start: int = 2019
+    # Night is a crash hour >= the first value or < the second (local clock time,
+    # not darkness): 22:00-05:59.
+    night_hours: tuple[int, int] = (22, 6)
     # A camera belongs to the nearest site centroid within this many feet.
     camera_radius_ft: float = 150.0
 
@@ -84,6 +128,19 @@ class RoadwayConfig:
     parking_lane_ft: float = 8.0
     # Estimated lane widths outside this range are treated as data errors (NA).
     lane_width_bounds_ft: tuple[float, float] = (7.0, 20.0)
+    # LION `BikeLane` codes that include a Class I (separated) facility: 1 Class I,
+    # 5 I+II, 8 I+III, 9 II+I, 10 III+I (from the LION metadata).
+    protected_bike_codes: tuple[str, ...] = ("1", "5", "8", "9", "10")
+    # Year-matched road features: each prediction year reads the last LION release
+    # published before Jan 1 of that year, so no later road change describes it
+    # (22d was never published). Sites themselves come from `data.reader.LION_PATH`.
+    release_by_year: tuple[tuple[int, str], ...] = (
+        (2022, "21d"),
+        (2023, "22c"),
+        (2024, "23d"),
+        (2025, "24d"),
+        (2026, "25d"),
+    )
 
 
 @dataclass(frozen=True)
