@@ -143,11 +143,47 @@ class RoadwayConfig:
     )
 
 
+# Raw camera ticket tables (one per fiscal year), already filtered to camera
+# violation codes at pull time.
+TICKET_TABLES = tuple(f"tickets_fy{y}" for y in range(2017, 2028))
+
+
+@dataclass(frozen=True)
+class CameraActivationConfig:
+    ticket_tables: tuple[str, ...] = TICKET_TABLES
+    # Tickets issued before this date are ignored.
+    start_date: str = "2016-01-01"
+    # A camera is active in a week with at least `min_weekly_tickets` tickets, and
+    # activated at the start of its first `min_consecutive_weeks` active weeks in a
+    # row. The default isn't scaled by permitted hours: tickets per camera fall as
+    # hours grow (median 51 a week before July 2019, 18 since 24/7), so a scaled bar
+    # rejects half of normal camera-weeks after 2022. The scaled version is kept as
+    # an alternative date, with `min_weekly_tickets` per `reference_hours` (the
+    # 50-hour week before July 2019).
+    min_weekly_tickets: int = 5
+    min_consecutive_weeks: int = 3
+    reference_hours: float = 50.0
+    # Locations with no sustained run and fewer tickets than this in all are text
+    # typos or mis-split locations, not cameras, and are dropped.
+    min_fallback_tickets: int = 100
+    # Speed cameras only count weeks they were allowed to ticket: the months in
+    # `speed_camera_schedule.csv`, minus school holidays, i.e. weeks whose citywide
+    # speed tickets fall below this share of the median week of their schedule period.
+    min_citywide_share: float = 0.25
+    # The ticket data starts June 13, 2016, but cameras ran from 2014. Activations
+    # before this date are cameras already running, flagged `left_censored`: June
+    # 2016, and the return from the 2016 summer break (117 "activations" in the first
+    # two weeks of September 2016, against 5 or fewer in 2017 and 2018).
+    data_start_cutoff: str = "2016-09-18"
+    # Speed-camera activations this many weeks after a schedule change (more hours in
+    # July 2019, 24/7 in August 2022) may be existing cameras ticketing more; they get
+    # "medium" confidence.
+    schedule_change_weeks: int = 4
+
+
 @dataclass(frozen=True)
 class CameraDirectionConfig:
-    # Raw camera ticket tables (one per fiscal year), already filtered to camera
-    # violation codes at pull time.
-    ticket_tables: tuple[str, ...] = tuple(f"tickets_fy{y}" for y in range(2017, 2028))
+    ticket_tables: tuple[str, ...] = TICKET_TABLES
     # Tickets issued before this date are ignored (same cutoff as the activation
     # notebook, eric/camera_activation_inference.ipynb).
     start_date: str = "2016-01-01"
