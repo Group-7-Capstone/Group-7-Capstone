@@ -75,31 +75,76 @@ def _cached_pull(table_name: str, dataset_id: str, where: str) -> int | None:
         con.close()
 
 
-def _fetch_pages(
-    client: Socrata, dataset_id: str, where: str, table_name: str, limit: int = 50000
-) -> Iterator[list[dict]]:
-    """Yield pages of a SODA query, paging by `:id` rather than `$offset`.
 
-    Socrata's offset pagination re-scans and discards every prior row on each
-    page, so cost grows with the offset; for the multi-million-row pulls here
-    that turns a few minutes into hours. Keyset paging on `:id` stays O(n).
-    """
-    cursor: str | None = None
+
+def _fetch_pages(
+    client: Socrata,
+    dataset_id: str,
+    where: str,
+    table_name: str,
+    limit: int = 2000,
+) -> Iterator[list[dict]]:
+    """Yield pages with retries for interrupted or malformed responses."""
+
+    import time
+    import requests
+    from json import JSONDecodeError
+
+    cursor = None
+
     with tqdm(desc=f"{table_name} rows", unit=" rows") as pbar:
         while True:
-            page_where = where if cursor is None else f"({where}) AND :id > '{cursor}'"
-            page = client.get(
-                dataset_id, select="*,:id", where=page_where, order=":id", limit=limit
+            page_where = (
+                where
+                if cursor is None
+                else f"({where}) AND :id > '{cursor}'"
             )
+
+            page = None
+
+            for attempt in range(8):
+                try:
+                    page = client.get(
+                        dataset_id,
+                        select="*,:id",
+                        where=page_where,
+                        order=":id",
+                        limit=limit,
+                    )
+                    break
+
+                except (
+                    requests.exceptions.RequestException,
+                    OSError,
+                    JSONDecodeError,
+                    ValueError,
+                ) as error:
+                    if attempt == 7:
+                        raise
+
+                    wait = 2 ** (attempt + 1)
+
+                    print(
+                        f"Request failed: {error}. "
+                        f"Retrying in {wait} seconds..."
+                    )
+
+                    time.sleep(wait)
+
             if not page:
                 break
+
             cursor = page[-1][":id"]
+
             for row in page:
                 row.pop(":id", None)
+
             yield page
             pbar.update(len(page))
+
             if len(page) < limit:
                 break
+
 
 
 def _page_table(page: list[dict]) -> pa.Table:

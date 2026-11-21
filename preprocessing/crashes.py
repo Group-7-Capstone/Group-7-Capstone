@@ -45,7 +45,7 @@ def clean_crashes(raw: pd.DataFrame, config: CrashConfig) -> pd.DataFrame:
     `crash_hour` is the hour of `crash_time`, NA if the time is unknown.
     """
     df = raw.copy()
-    df["collision_id"] = pd.to_numeric(df["collision_id"]).astype("int64")
+    df["collision_id"] = df["collision_id"].astype("string")
     df["crash_date"] = pd.to_datetime(df["crash_date"]).dt.normalize()
     for col in ["latitude", "longitude"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -92,7 +92,7 @@ def flag_ksi(
     severe lists. Crashes with no person records get zero severe injuries.
     """
     p = persons.copy()
-    p["collision_id"] = pd.to_numeric(p["collision_id"]).astype("int64")
+    p["collision_id"] = p["collision_id"].astype("string")
     p["killed"] = p["person_injury"].eq("Killed")
     p["severe"] = p["person_injury"].eq("Injured") & (
         p["complaint"].isin(config.severe_complaints)
@@ -132,7 +132,7 @@ def flag_crash_types(
     rlr = crashes[factors].eq(config.rlr_factor).any(axis=1)
 
     v = vehicles.copy()
-    v["collision_id"] = pd.to_numeric(v["collision_id"]).astype("int64")
+    v["collision_id"] = v["collision_id"].astype("string")
     impact = v["point_of_impact"]
     v["front"] = impact.isin(config.front_impacts)
     v["rear"] = impact.isin(config.rear_impacts)
