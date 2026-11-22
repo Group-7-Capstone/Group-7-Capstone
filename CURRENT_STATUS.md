@@ -44,6 +44,11 @@ DOT agreed (Nov 2026) that we focus on **speed cameras**. About 3,000 speed came
 - **Features:** `preprocessing/pedestrians.py` takes the busiest segment within 100 ft of each site (weekday 8–9 AM + 12:30–1:30 PM + 5–6 PM) and gives `FEATURE_SETS["pedestrian"]`. 97% of intersections and 95% of mid-block sites match; the rest get the median and `ped_missing`.
 - **Not used:** the paper's `.pckl` files are Random Forest calibrators. Rerunning them needs their `madina` network model and proprietary InfoGroup business data, so we use the published estimates only.
 - **Caveats:** it's a pre-COVID snapshot, so it's a fixed site feature, not change over time. It underestimates the busiest places (held-out R² about 0.7 on weekdays).
-- **Next:** a holdout check of top-k with and without the feature, and whether it makes comparison sites more like camera sites. Only then decide on MapPLUTO land use (#33 part 2), which NYC Walks already partly captures.
+- **Holdout check** (`experiments/pedestrian_exposure.ipynb`): **keep it in the EB baseline.**
+  - Without crash history, top-1,000 KSI capture rises from 6.0% to 7.6% (+1.6 points, 95% interval +0.9 to +2.4), about 1.5× expected KSI per doubling of foot traffic.
+  - With crash history the change is within noise (+0.2 points).
+  - Speed-camera sites are busier on foot (standardized difference 0.27), but road features already explain that (about 0 after them).
+- **Still to check:** injury and pedestrian-injury outcomes. `NegativeBinomialModel` doesn't converge on them, which needs a model-layer fix.
+- **MapPLUTO (#33 part 2):** test it only as an addition to road-only + pedestrian.
 
 Combine it with the other exposure proxies: traffic counts (#35), LION road class and lanes, and Citi Bike (#51). Following the paper, report results under several exposure versions rather than relying on one.
