@@ -1,4 +1,4 @@
-# Current Status (as of Nov 16 2026)
+# Current Status
 
 > Temporary context. Update it as items are finished and delete what's resolved. The lasting rules are in `AGENTS.md`, and background is in `README.md`.
 
