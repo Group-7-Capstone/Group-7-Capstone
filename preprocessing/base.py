@@ -1,5 +1,8 @@
-"""Shared step logic for preprocessing: reading street text from camera tickets."""
+"""Shared step logic for preprocessing: reading street text from camera tickets, and
+finding the line features near each site."""
 
+import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 # A ticket direction code is either a prefix ("NB ...", "N/B ...", "NWB ...") or in
@@ -65,3 +68,14 @@ def normalize_street(text: pd.Series) -> pd.Series:
     return out.str.replace(
         rf"(\d)(?:ST|ND|RD|TH)(?=(?:{_STREET_TYPES}))", r"\1", regex=True
     )
+
+
+def sites_within(
+    sites: pd.DataFrame, lines: gpd.GeoDataFrame, radius_ft: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Index pairs (site row, line row) for every line within `radius_ft` of a site.
+
+    `sites` has projected `x`, `y` in the same feet-based CRS as `lines`.
+    """
+    points = gpd.GeoSeries(gpd.points_from_xy(sites["x"], sites["y"]), crs=lines.crs)
+    return lines.sindex.query(points, predicate="dwithin", distance=radius_ft)

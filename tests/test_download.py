@@ -1,4 +1,4 @@
-"""Tests for data/download.py: SODA pagination and LION releases."""
+"""Tests for data/download.py: SODA pagination, LION releases and NYC Walks."""
 
 import io
 import zipfile
@@ -94,3 +94,47 @@ def test_download_lion_unzips_release_and_logs_provenance(tmp_path, monkeypatch)
     with duckdb.connect(db) as con:
         logged = con.execute("SELECT table_name, query FROM _provenance").fetchall()
     assert logged == [("lion_22c", urls[0])]
+
+
+def test_download_nycwalks_unzips_shapefile_and_logs_provenance(tmp_path, monkeypatch):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("SHP/NYC_pednetwork_estimates_counts_2018-2019.shp", b"x")
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield buffer.getvalue()
+
+    db = str(tmp_path / "cache.duckdb")
+    with duckdb.connect(db) as con:
+        con.execute(
+            "CREATE TABLE _provenance (table_name VARCHAR, dataset_id VARCHAR, "
+            "query VARCHAR, pulled_at TIMESTAMP)"
+        )
+    urls = []
+    out_dir = tmp_path / "nycwalks"
+    monkeypatch.setattr(download, "NYCWALKS_DIR", out_dir)
+    monkeypatch.setattr(download, "get_connection", lambda: duckdb.connect(db))
+    monkeypatch.setattr(
+        download.requests, "get", lambda url, **kw: urls.append(url) or _Response()
+    )
+
+    download.download_nycwalks()
+    download.download_nycwalks()  # already there: no second download
+
+    assert (out_dir / "SHP" / "NYC_pednetwork_estimates_counts_2018-2019.shp").exists()
+    assert urls == [download.NYCWALKS_URL]
+    with duckdb.connect(db) as con:
+        logged = con.execute(
+            "SELECT table_name, dataset_id, query FROM _provenance"
+        ).fetchall()
+    assert logged == [("nycwalks", download.NYCWALKS_SOURCE, urls[0])]
