@@ -15,6 +15,7 @@ from scipy.spatial import cKDTree
 from data.reader import read_camera_data, read_lion
 from preprocessing.config import CrashConfig, PanelConfig, RoadwayConfig, SiteConfig
 from preprocessing.crashes import load_crashes
+from preprocessing.pedestrians import PEDESTRIAN_FEATURES
 from preprocessing.roadway import (
     ROADWAY_FEATURES,
     SEGMENT_COLUMNS,
@@ -67,6 +68,8 @@ FEATURE_SETS = {
         f for f in ROADWAY_FEATURES if f not in ("bike_lane", "protected_bike_lane")
     ],
     "bike": ["bike_lane", "protected_bike_lane"],
+    # After `pedestrians.add_pedestrian_features` (NYC Walks, one 2018-19 snapshot).
+    "pedestrian": PEDESTRIAN_FEATURES,
     "site": SITE_FEATURES,
     "temporal": TEMPORAL_FEATURES,
 }

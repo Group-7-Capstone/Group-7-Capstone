@@ -212,3 +212,14 @@ class CameraDirectionConfig:
     # feet of the street and the street within 45 degrees of the grid direction;
     # anything else within `max_bearing_offset_deg` is "medium".
     high_confidence_distance_ft: float = 50.0
+
+
+@dataclass(frozen=True)
+class PedestrianConfig:
+    # NYC Walks sidewalk and crosswalk segments within this many feet of a site
+    # centroid describe the site (same as SiteConfig.radius_ft).
+    radius_ft: float = 100.0
+    # A segment's volume is the sum of these modeled weekday peak hours (8-9 AM,
+    # 12:30-1:30 PM, 5-6 PM), the exposure denominator in Sevtsuk et al.'s crash
+    # analysis. A site takes the busiest segment within the radius.
+    volume_columns: tuple[str, ...] = ("predwkdyAM", "predwkdyMD", "predwkdyPM")

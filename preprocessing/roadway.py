@@ -26,6 +26,7 @@ import pandas as pd
 from scipy.spatial import cKDTree
 
 from data.reader import read_lion
+from preprocessing.base import sites_within
 from preprocessing.config import RoadwayConfig, SiteConfig
 
 log = logging.getLogger(__name__)
@@ -162,10 +163,7 @@ def match_segments(
     roadbeds = segments[
         segments["SegmentTyp"].isin(config.roadbed_segment_types)
     ].reset_index(drop=True)
-    points = gpd.GeoSeries(gpd.points_from_xy(sites["x"], sites["y"]), crs=roadbeds.crs)
-    site_i, seg_i = roadbeds.sindex.query(
-        points, predicate="dwithin", distance=config.radius_ft
-    )
+    site_i, seg_i = sites_within(sites, roadbeds, config.radius_ft)
     pairs = pd.DataFrame(roadbeds.drop(columns="geometry").iloc[seg_i]).reset_index(
         drop=True
     )

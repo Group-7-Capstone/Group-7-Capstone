@@ -39,4 +39,11 @@ DOT agreed (Nov 2026) that we focus on **speed cameras**. About 3,000 speed came
 ## External data
 - **Pending, don't build against yet:** DOT crash narratives (MV-104), which may be released later for QA/QC.
 
-DOT won't provide the MIT "NYC Walks" pedestrian model, but City Form Lab publishes it ([project page](https://cityform.mit.edu/projects/nycwalks)): GeoJSON or SHP with peak-period pedestrian volume per sidewalk and crosswalk segment, 2018–2019, no license stated. It's a one-time snapshot, so use it as a site feature in the baseline, not for changes over time. Combine it with the other exposure proxies: traffic counts (#35), MapPLUTO land use (#33), LION road class and lanes, and Citi Bike (#51). Following the paper, report results under several exposure versions rather than relying on one.
+**NYC Walks pedestrian volume (#33), in review.**
+- **What we use:** City Form Lab's ([project page](https://cityform.mit.edu/projects/nycwalks); Sevtsuk et al., *Nature Cities*, doi:10.1038/s44284-025-00383-y) published SHP of modeled peak-hour pedestrian volume per sidewalk and crosswalk segment for a typical 2018–19 weekday. No license is stated, so cite the paper. Download it with `data.download.download_nycwalks()`.
+- **Features:** `preprocessing/pedestrians.py` takes the busiest segment within 100 ft of each site (weekday 8–9 AM + 12:30–1:30 PM + 5–6 PM) and gives `FEATURE_SETS["pedestrian"]`. 97% of intersections and 95% of mid-block sites match; the rest get the median and `ped_missing`.
+- **Not used:** the paper's `.pckl` files are Random Forest calibrators. Rerunning them needs their `madina` network model and proprietary InfoGroup business data, so we use the published estimates only.
+- **Caveats:** it's a pre-COVID snapshot, so it's a fixed site feature, not change over time. It underestimates the busiest places (held-out R² about 0.7 on weekdays).
+- **Next:** a holdout check of top-k with and without the feature, and whether it makes comparison sites more like camera sites. Only then decide on MapPLUTO land use (#33 part 2), which NYC Walks already partly captures.
+
+Combine it with the other exposure proxies: traffic counts (#35), LION road class and lanes, and Citi Bike (#51). Following the paper, report results under several exposure versions rather than relying on one.
