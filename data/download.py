@@ -10,21 +10,47 @@ import os
 import shutil
 import hashlib
 from pathlib import Path
+import tempfile
+import zipfile
 from collections.abc import Iterator
 from datetime import datetime, timezone
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import requests
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from sodapy import Socrata
 from tqdm import tqdm
 from urllib3.util.retry import Retry
-from data.base import PROVENANCE_TABLE, get_connection, parquet_path
+
+from data.base import (
+    NYCWALKS_DIR,
+    PROVENANCE_TABLE,
+    get_connection,
+    lion_release_dir,
+    parquet_path,
+)
 
 load_dotenv()
 
 SOCRATA_DOMAIN = "data.cityofnewyork.us"
+# Every DCP LION release, e.g. "22c" (listed on nyc.gov/content/planning/pages/
+# resources/datasets/lion, which blocks scripted access; the files don't).
+LION_URL = (
+    "https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/lion/"
+    "nyclion_{release}.zip"
+)
+# MIT City Form Lab "NYC Walks" pedestrian network with modeled 2018-19 peak-hour
+# volumes (cityform.mit.edu/projects/nycwalks). No license is stated; cite the paper.
+NYCWALKS_URL = (
+    "https://www.dropbox.com/scl/fi/x3fgckcb120d4ugn561mv/SHP.zip"
+    "?rlkey=tc4peg7avj3ibpese9tc0bx2d&dl=1"
+)
+NYCWALKS_SOURCE = (
+    "MIT City Form Lab NYC Walks (Sevtsuk et al., Nature Cities, "
+    "doi:10.1038/s44284-025-00383-y)"
+)
 
 
 def checksum(path):
@@ -333,3 +359,57 @@ def fetch_soda(
             con.close()
     finally:
         shutil.rmtree(parts_dir, ignore_errors=True)
+
+
+def _download_zip(url: str, out_dir) -> None:
+    """Stream the zip at `url` and unzip it into `out_dir`, replacing what's there."""
+    shutil.rmtree(out_dir, ignore_errors=True)
+    with tempfile.TemporaryFile() as tmp:
+        with requests.get(url, stream=True, timeout=120) as response:
+            response.raise_for_status()
+            for chunk in response.iter_content(chunk_size=1 << 20):
+                tmp.write(chunk)
+        tmp.seek(0)
+        with zipfile.ZipFile(tmp) as archive:
+            archive.extractall(out_dir)
+
+
+def _log_provenance(table_name: str, dataset_id: str, query: str) -> None:
+    """Replace `table_name`'s row in `_provenance` with this pull, timestamped now."""
+    con = get_connection()
+    try:
+        con.execute(
+            f"DELETE FROM {PROVENANCE_TABLE} WHERE table_name = ?", [table_name]
+        )
+        con.execute(
+            f"INSERT INTO {PROVENANCE_TABLE} VALUES (?, ?, ?, ?)",
+            [table_name, dataset_id, query, datetime.now(timezone.utc)],
+        )
+    finally:
+        con.close()
+
+
+def download_lion(release: str, force: bool = False) -> None:
+    """Download and unzip a DCP LION release (e.g. "22c") into `lion_release_dir`.
+
+    Logs the release URL in `_provenance` as table `lion_<release>`. A release
+    already unzipped is kept unless `force=True`.
+    """
+    out_dir = lion_release_dir(release)
+    if out_dir.exists() and not force:
+        return
+    url = LION_URL.format(release=release)
+    _download_zip(url, out_dir)
+    _log_provenance(f"lion_{release}", "DCP LION", url)
+
+
+def download_nycwalks(force: bool = False) -> None:
+    """Download and unzip the NYC Walks network shapefile into `NYCWALKS_DIR`.
+
+    Only the SHP zip (~56 MB) is fetched, not the calibrated .pckl models. Logs the
+    URL in `_provenance` as table `nycwalks`. Kept unless `force=True`.
+    """
+    if NYCWALKS_DIR.exists() and not force:
+        return
+    _download_zip(NYCWALKS_URL, NYCWALKS_DIR)
+    _log_provenance("nycwalks", NYCWALKS_SOURCE, NYCWALKS_URL)

@@ -41,6 +41,8 @@ experiments/camera-ticket-trends/*.html
 !experiments/camera-ticket-trends/Ticket_Trend_Processing_Walkthrough.html
 *.log
 data/lion/
+data/nycwalks/
 
 # Generated experiment outputs (risk tables, local report site)
 experiments/outputs/
+midterm-report/outputs/

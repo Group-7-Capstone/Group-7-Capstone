@@ -1,20 +1,36 @@
-"""Tests for crash cleaning, KSI flagging and site clustering in preprocessing/."""
+"""Tests for crash cleaning, KSI and crash-type flags, and sites in preprocessing/."""
 
+import geopandas as gpd
+import numpy as np
 import pandas as pd
+from shapely.geometry import LineString
 
 from preprocessing.config import CrashConfig, PanelConfig, SiteConfig
-from preprocessing.crashes import clean_crashes, drop_ungeocoded, flag_ksi
+from preprocessing.crashes import (
+    clean_crashes,
+    drop_ungeocoded,
+    flag_crash_types,
+    flag_ksi,
+)
 from preprocessing.panel import (
+    FEATURE_SETS,
     add_camera_flags,
     add_lag_features,
     add_log1p_features,
+    add_recent_change,
+    add_site_features,
+    add_temporal_features,
     append_scoring_year,
     count_site_years,
     drop_mixed_definition_years,
 )
 from preprocessing.sites import (
     add_site_borough,
+    assign_nearest_site,
     assign_sites,
+    assign_unmatched_to_blocks,
+    build_intersection_sites,
+    build_midblock_sites,
     build_site_points,
     project_coordinates,
     summarize_sites,
@@ -130,6 +146,10 @@ def _site_crashes(rows):
             "number_of_pedestrians_killed": pd.array([0] * len(df), dtype="Int64"),
             "number_of_cyclist_injured": pd.array([0] * len(df), dtype="Int64"),
             "number_of_cyclist_killed": pd.array([0] * len(df), dtype="Int64"),
+            "rlr": df["ksi"],
+            "rear_end": False,
+            "angle": False,
+            "crash_hour": pd.array([12] * len(df), dtype="Int64"),
         }
     )
 
@@ -251,3 +271,194 @@ def test_site_borough_is_most_common_before_build_end():
 
     assert out["borough"].iloc[0] == "QUEENS"
     assert pd.isna(out["borough"].iloc[1])
+
+
+def test_flag_crash_types_from_factors_and_impact_points():
+    crashes = pd.DataFrame(
+        {
+            "collision_id": [1, 2, 3, 4],
+            "contributing_factor_vehicle_1": [
+                "Traffic Control Disregarded",
+                "Unspecified",
+                None,
+                "Unspecified",
+            ],
+            "contributing_factor_vehicle_2": [
+                None,
+                "Traffic Control Disregarded",
+                None,
+                None,
+            ],
+        }
+    )
+    vehicles = pd.DataFrame(
+        {
+            "collision_id": ["1", "1", "2", "2", "3", "3", "3"],
+            "point_of_impact": [
+                "Center Front End",  # 1: front + back -> rear-end
+                "Center Back End",
+                "Left Front Bumper",  # 2: front + side -> angle
+                "Right Side Doors",
+                "Center Front End",  # 3: front + back + side -> rear-end, not angle
+                "Left Rear Bumper",
+                "Left Side Doors",
+            ],
+        }
+    )
+
+    out = flag_crash_types(crashes, vehicles, CONFIG).set_index("collision_id")
+
+    assert out["rlr"].tolist() == [True, True, False, False]
+    assert out["rear_end"].tolist() == [True, False, True, False]
+    assert out["angle"].tolist() == [False, True, False, False]  # 4: no vehicles
+
+
+def test_crash_type_counts_reach_the_panel():
+    config = PanelConfig(first_year=2017, last_year=2018, lag_years=1)
+    crashes = _site_crashes(
+        [(0, "2017-05-01", True, 1, 0), (0, "2018-05-01", False, 0, 0)]
+    )
+
+    counts = count_site_years(crashes, pd.DataFrame({"site_id": [0]}), config)
+
+    assert counts.set_index("year")["rlr"].to_dict() == {2017: 1, 2018: 0}
+
+
+def test_intersection_sites_merge_nearby_nodes_and_take_nearest_crashes():
+    config = SiteConfig(node_merge_ft=60.0, radius_ft=100.0)
+    nodes = pd.DataFrame(
+        {
+            "node_id": [10, 11, 12],
+            "x": [0.0, 50.0, 1000.0],  # 10 and 11: one divided-road intersection
+            "y": [0.0, 0.0, 0.0],
+            "legs": [3, 4, 4],
+        }
+    )
+
+    sites = build_intersection_sites(nodes, config)
+    crashes = pd.DataFrame({"x": [30.0, 990.0, 500.0], "y": [5.0, 0.0, 0.0]})
+    assigned = assign_nearest_site(crashes, sites, config)
+
+    assert sorted(sites["n_nodes"]) == [1, 2]
+    merged = sites.loc[sites["n_nodes"] == 2].iloc[0]
+    assert (merged["x"], merged["legs"]) == (25.0, 4)
+    by_x = dict(zip(sites["x"], sites["site_id"]))
+    assert assigned["site_id"].tolist()[:2] == [by_x[25.0], by_x[1000.0]]
+    assert pd.isna(assigned["site_id"].iloc[2])  # 475+ ft from both
+
+
+def test_midblock_sites_one_per_segment_numbered_after_intersections():
+    segments = gpd.GeoDataFrame(
+        {"SegmentID": ["0001", "0001", "0002"]},  # 0001 listed twice in LION
+        geometry=[
+            LineString([(0, 0), (400, 0)]),
+            LineString([(0, 0), (400, 0)]),
+            LineString([(0, 0), (0, 300)]),
+        ],
+    )
+
+    blocks = build_midblock_sites(segments, first_id=10)
+
+    assert blocks["site_id"].tolist() == [10, 11]
+    assert blocks[["x", "y", "length_ft"]].values.tolist() == [
+        [200.0, 0.0, 400.0],
+        [0.0, 150.0, 300.0],
+    ]
+
+
+def test_crashes_off_intersections_go_to_the_nearest_block_within_radius():
+    config = SiteConfig(radius_ft=100.0)
+    blocks = gpd.GeoDataFrame(
+        {"site_id": [10]}, geometry=[LineString([(0, 0), (1000, 0)])]
+    )
+    crashes = pd.DataFrame(
+        {
+            "site_id": pd.array([3, pd.NA, pd.NA], dtype="Int64"),
+            "x": [500.0, 500.0, 500.0],
+            "y": [20.0, 40.0, 400.0],  # third is 400 ft from the street
+        }
+    )
+
+    out = assign_unmatched_to_blocks(crashes, blocks, config)
+
+    assert out["site_id"].iloc[0] == 3  # already at an intersection: unchanged
+    assert out["site_id"].iloc[1] == 10
+    assert pd.isna(out["site_id"].iloc[2])
+
+
+def test_site_features_flag_midblock_and_log_length_only_there():
+    sites = pd.DataFrame(
+        {"site_id": [0, 1], "midblock": [False, True], "length_ft": [np.nan, 400.0]}
+    )
+    panel = pd.DataFrame({"site_id": [0, 1], "year": [2023, 2023]})
+
+    out = add_site_features(panel, sites)
+
+    assert out["midblock"].tolist() == [0, 1]
+    assert out["log_block_length"].tolist() == [0.0, np.log(400.0)]
+
+
+def test_history_and_crash_type_features_come_out_of_the_panel_steps():
+    config = PanelConfig(first_year=2017, last_year=2020, lag_years=3)
+    crashes = _site_crashes([(0, "2017-05-01", True, 1, 0)])
+    counts = count_site_years(crashes, pd.DataFrame({"site_id": [0]}), config)
+
+    rows = add_log1p_features(add_lag_features(counts, config))
+
+    for name in ["history", "crash_types"]:
+        assert set(FEATURE_SETS[name]) <= set(rows.columns), name
+
+
+def test_crash_hour_parsed_and_placeholder_midnight_is_unknown():
+    raw = pd.DataFrame(
+        {
+            "collision_id": ["1", "2", "3"],
+            "crash_date": ["2020-01-01T00:00:00.000"] * 3,
+            "crash_time": ["0:00", "23:15", "7:05"],
+            "latitude": ["40.7"] * 3,
+            "longitude": ["-73.9"] * 3,
+        }
+    )
+
+    out = clean_crashes(raw, CONFIG)
+
+    assert pd.isna(out["crash_hour"].iloc[0])
+    assert out["crash_hour"].iloc[1:].tolist() == [23, 7]
+
+
+def test_temporal_features_use_only_the_lag_window():
+    config = PanelConfig(first_year=2017, last_year=2020, lag_years=3)
+    crashes = _site_crashes(
+        [
+            (0, "2017-05-06", False, 0, 0),  # Saturday
+            (0, "2018-05-01", False, 0, 0),
+            (0, "2019-05-01", False, 0, 0),
+            (0, "2019-05-02", False, 0, 0),
+            (0, "2020-05-01", False, 0, 0),  # outcome year: never a feature
+        ]
+    )
+    crashes.loc[1, "crash_hour"] = 23  # night
+    crashes.loc[2, "crash_hour"] = pd.NA  # unknown time
+    sites = pd.DataFrame({"site_id": [0, 1]})
+    counts = add_recent_change(count_site_years(crashes, sites, config))
+
+    rows = add_temporal_features(add_lag_features(counts, config), config)
+    by_site = rows[rows["year"] == 2020].set_index("site_id")
+
+    assert by_site.loc[0, "night_share"] == 1 / 3  # 1 of 3 known-time crashes
+    assert by_site.loc[0, "weekend_share"] == 1 / 4
+    assert np.isclose(by_site.loc[0, "recent_change"], np.log1p(2) - np.log1p(1))
+    assert by_site["no_history"].tolist() == [0, 1]
+    assert by_site.loc[
+        1, ["night_share", "weekend_share", "recent_change"]
+    ].tolist() == [0, 0, 0]
+
+
+def test_site_features_work_for_intersection_only_sites():
+    sites = pd.DataFrame({"site_id": [0, 1], "midblock": [False, False]})
+    panel = pd.DataFrame({"site_id": [0, 1], "year": [2023, 2023]})
+
+    out = add_site_features(panel, sites)
+
+    assert out["midblock"].tolist() == [0, 0]
+    assert out["log_block_length"].tolist() == [0.0, 0.0]

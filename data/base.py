@@ -17,11 +17,20 @@ import duckdb
 DB_PATH = Path(__file__).resolve().parent / "raw" / "nyc_open_data.duckdb"
 
 PROVENANCE_TABLE = "_provenance"
+# DCP LION releases, one folder per release (e.g. "22c"), git-ignored.
+LION_DIR = Path(__file__).resolve().parent / "lion"
+# MIT City Form Lab NYC Walks pedestrian network (`download.download_nycwalks`).
+NYCWALKS_DIR = Path(__file__).resolve().parent / "nycwalks"
 
 
 def parquet_path(table_name: str) -> Path:
     """Return where a raw table's Parquet file lives."""
     return DB_PATH.parent / f"{table_name}.parquet"
+
+
+def lion_release_dir(release: str) -> Path:
+    """Return the folder a LION release (e.g. "22c") is unzipped into."""
+    return LION_DIR / release
 
 
 def register_parquet_views(con: duckdb.DuckDBPyConnection) -> None:

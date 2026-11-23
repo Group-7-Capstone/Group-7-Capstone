@@ -33,6 +33,34 @@ class CrashConfig:
         "Apparent Death",
     )
 
+    # Crash times recorded as exactly these are treated as unknown: "0:00" appears
+    # 4-6x as often as nearby minutes (1.7% of crashes), so it is mostly a placeholder.
+    unknown_crash_times: tuple[str, ...] = ("0:00",)
+
+    # Crash types. A crash is red-light running (RLR) if any vehicle's contributing
+    # factor is this value (a proxy: it also covers stop signs and other controls).
+    rlr_factor: str = "Traffic Control Disregarded"
+    # Vehicles table `point_of_impact` groups. Rear-end: one vehicle hit on its
+    # front, another on its back. Angle: one hit on its front, another on its side.
+    front_impacts: tuple[str, ...] = (
+        "Center Front End",
+        "Left Front Bumper",
+        "Right Front Bumper",
+    )
+    rear_impacts: tuple[str, ...] = (
+        "Center Back End",
+        "Left Rear Bumper",
+        "Right Rear Bumper",
+    )
+    side_impacts: tuple[str, ...] = (
+        "Left Front Quarter Panel",
+        "Right Front Quarter Panel",
+        "Left Side Doors",
+        "Right Side Doors",
+        "Left Rear Quarter Panel",
+        "Right Rear Quarter Panel",
+    )
+
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -44,6 +72,19 @@ class SiteConfig:
     # Sites are built only from crashes before this date, so held-out years
     # never define which sites exist. Test periods must start on or after it.
     build_end: str = "2024-01-01"
+    # "lion" (the team standard): LION intersections, plus mid-block sites if
+    # `midblock`. "crashes": peak-radius crash clusters (Q1, Q2). LION sites don't
+    # depend on crash dates, so `build_end` only limits crash clusters.
+    source: str = "lion"
+    # LION nodes of one intersection (divided roads meet at several nodes) within
+    # this many feet of each other are merged into one site. With "lion", a crash
+    # belongs to the nearest site within `radius_ft`.
+    node_merge_ft: float = 60.0
+    # With "lion", every LION street segment (one block between two nodes) is also
+    # a site, and a crash not within `radius_ft` of an intersection belongs to the
+    # nearest segment within `radius_ft`. Intersection-only sites drop ~19% of KSI
+    # crashes, where mid-block speed cameras can sit.
+    midblock: bool = True
 
 
 @dataclass(frozen=True)
@@ -58,5 +99,127 @@ class PanelConfig:
     # prediction years whose whole lag window starts on or after this year are kept,
     # so every KSI-based feature uses one definition.
     ksi_definition_start: int = 2019
+    # Night is a crash hour >= the first value or < the second (local clock time,
+    # not darkness): 22:00-05:59.
+    night_hours: tuple[int, int] = (22, 6)
     # A camera belongs to the nearest site centroid within this many feet.
     camera_radius_ft: float = 150.0
+
+
+@dataclass(frozen=True)
+class RoadwayConfig:
+    # LION segments within this many feet of a site centroid describe the site
+    # (same as SiteConfig.radius_ft, so a site's roads span its crash locations).
+    radius_ft: float = 100.0
+    # LION FeatureTyp "0" is a street; the rest are rail, shoreline, boundaries, etc.
+    street_feature_types: tuple[str, ...] = ("0",)
+    # RW_TYPE codes that aren't roads a car drives on: boardwalk, path, step street,
+    # driveway, non-physical segment, ferry route.
+    non_road_rw_types: tuple[int, ...] = (5, 6, 7, 8, 12, 14)
+    # Highway (2) and ramp (9) segments.
+    highway_rw_types: tuple[int, ...] = (2, 9)
+    # Lanes, width and speed are recorded on roadbed-level segments; intersection
+    # legs are counted on the generic network (one centerline per street).
+    roadbed_segment_types: tuple[str, ...] = ("U", "R", "B", "C", "T", "S", "E")
+    generic_segment_types: tuple[str, ...] = ("U", "B", "G")
+    # A node where at least this many generic street segments meet is an intersection.
+    min_intersection_legs: int = 3
+    # Lane width = (curb-to-curb width - parking lanes * this) / travel lanes.
+    parking_lane_ft: float = 8.0
+    # Estimated lane widths outside this range are treated as data errors (NA).
+    lane_width_bounds_ft: tuple[float, float] = (7.0, 20.0)
+    # LION `BikeLane` codes that include a Class I (separated) facility: 1 Class I,
+    # 5 I+II, 8 I+III, 9 II+I, 10 III+I (from the LION metadata).
+    protected_bike_codes: tuple[str, ...] = ("1", "5", "8", "9", "10")
+    # Year-matched road features: each prediction year reads the last LION release
+    # published before Jan 1 of that year, so no later road change describes it
+    # (22d was never published). Sites themselves come from `data.reader.LION_PATH`.
+    release_by_year: tuple[tuple[int, str], ...] = (
+        (2022, "21d"),
+        (2023, "22c"),
+        (2024, "23d"),
+        (2025, "24d"),
+        (2026, "25d"),
+    )
+
+
+# Raw camera ticket tables (one per fiscal year), already filtered to camera
+# violation codes at pull time.
+TICKET_TABLES = tuple(f"tickets_fy{y}" for y in range(2017, 2028))
+
+
+@dataclass(frozen=True)
+class CameraActivationConfig:
+    ticket_tables: tuple[str, ...] = TICKET_TABLES
+    # Tickets issued before this date are ignored.
+    start_date: str = "2016-01-01"
+    # A camera is active in a week with at least `min_weekly_tickets` tickets, and
+    # activated at the start of its first `min_consecutive_weeks` active weeks in a
+    # row. The default isn't scaled by permitted hours: tickets per camera fall as
+    # hours grow (median 51 a week before July 2019, 18 since 24/7), so a scaled bar
+    # rejects half of normal camera-weeks after 2022. The scaled version is kept as
+    # an alternative date, with `min_weekly_tickets` per `reference_hours` (the
+    # 50-hour week before July 2019).
+    min_weekly_tickets: int = 5
+    min_consecutive_weeks: int = 3
+    reference_hours: float = 50.0
+    # Locations with no sustained run and fewer tickets than this in all are text
+    # typos or mis-split locations, not cameras, and are dropped.
+    min_fallback_tickets: int = 100
+    # Speed cameras only count weeks they were allowed to ticket: the months in
+    # `speed_camera_schedule.csv`, minus school holidays, i.e. weeks whose citywide
+    # speed tickets fall below this share of the median week of their schedule period.
+    min_citywide_share: float = 0.25
+    # The ticket data starts June 13, 2016, but cameras ran from 2014. Activations
+    # before this date are cameras already running, flagged `left_censored`: June
+    # 2016, and the return from the 2016 summer break (117 "activations" in the first
+    # two weeks of September 2016, against 5 or fewer in 2017 and 2018).
+    data_start_cutoff: str = "2016-09-18"
+    # Speed-camera activations this many weeks after a schedule change (more hours in
+    # July 2019, 24/7 in August 2022) may be existing cameras ticketing more; they get
+    # "medium" confidence.
+    schedule_change_weeks: int = 4
+
+
+@dataclass(frozen=True)
+class CameraDirectionConfig:
+    ticket_tables: tuple[str, ...] = TICKET_TABLES
+    # Tickets issued before this date are ignored (same cutoff as the activation
+    # notebook, eric/camera_activation_inference.ipynb).
+    start_date: str = "2016-01-01"
+    # A direction with less than this share of its location's tickets may be a data
+    # entry error rather than a separately enforced approach; it gets low confidence.
+    min_direction_share: float = 0.05
+    # Location: LION street names shorter than this (after normalizing) are ignored as
+    # cross streets, so e.g. "AVI" isn't found inside "HAVILAND".
+    min_street_name_length: int = 3
+    # Nodes where the same street pair meets count as one intersection (divided roads
+    # meet at several nodes) if they're all within this many feet of each other.
+    max_node_spread_ft: float = 400.0
+    # Bearing: LION roadbed segments of the camera's own street within this many feet
+    # of the geocoded camera point are candidates.
+    street_radius_ft: float = 150.0
+    # A LION street name matches the camera's street if it starts the normalized
+    # search_query, or failing that, is at least this similar to its start (typos).
+    min_street_name_similarity: float = 0.8
+    # The street's bearing is measured over this many feet either side of the camera.
+    tangent_half_length_ft: float = 20.0
+    # A street running more than this far off the ticket's grid direction (a diagonal
+    # street labeled N/S or E/W) still gets a bearing, with "low" confidence.
+    # Manhattan's grid is about 29 degrees off true north, so this must exceed that.
+    max_bearing_offset_deg: float = 60.0
+    # "high" bearing confidence needs an exact name match, the camera within this many
+    # feet of the street and the street within 45 degrees of the grid direction;
+    # anything else within `max_bearing_offset_deg` is "medium".
+    high_confidence_distance_ft: float = 50.0
+
+
+@dataclass(frozen=True)
+class PedestrianConfig:
+    # NYC Walks sidewalk and crosswalk segments within this many feet of a site
+    # centroid describe the site (same as SiteConfig.radius_ft).
+    radius_ft: float = 100.0
+    # A segment's volume is the sum of these modeled weekday peak hours (8-9 AM,
+    # 12:30-1:30 PM, 5-6 PM), the exposure denominator in Sevtsuk et al.'s crash
+    # analysis. A site takes the busiest segment within the radius.
+    volume_columns: tuple[str, ...] = ("predwkdyAM", "predwkdyMD", "predwkdyPM")

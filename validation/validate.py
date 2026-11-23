@@ -1,7 +1,9 @@
 """Temporal validation of any count model (see `model/base.py`) on the site x year panel.
 
-For each test year T the model is fit on all rows with year < T and scored on
-year T (an expanding window).
+The team standard is `pooled_holdout`: fit once on years before
+`ValidationConfig.test_years` and score each site's total over that window.
+`evaluate` is the older expanding window: for each test year T the model is fit
+on all rows with year < T and scored on year T.
 """
 
 from collections.abc import Callable, Iterator
@@ -16,8 +18,9 @@ from model.base import CountModel
 
 @dataclass(frozen=True)
 class ValidationConfig:
-    # Test years must be on or after the site build cutoff (SiteConfig.build_end).
-    test_years: tuple[int, ...] = (2024, 2025)
+    # The pooled test window. With crash-cluster sites, test years must be on or
+    # after the site build cutoff (SiteConfig.build_end); LION sites have none.
+    test_years: tuple[int, ...] = (2023, 2024, 2025)
     top_k: tuple[int, ...] = (50, 100, 250, 500, 1000)
     # Calibration bins as quantiles of predicted risk. They narrow toward the top,
     # where watch lists are drawn, so over-predicted top sites can't hide inside a
@@ -71,6 +74,18 @@ def top_k_totals(y: pd.Series, pred: pd.Series, k: int) -> tuple[float, float]:
     """
     predicted = float(np.sort(np.asarray(pred, dtype=float))[::-1][:k].sum())
     return predicted, top_k_capture(y, pred, k) * float(np.sum(y))
+
+
+def poisson_deviance(y: pd.Series, pred: pd.Series) -> float:
+    """Mean Poisson deviance of predicted counts (lower is better).
+
+    Unlike top-k capture it scores every site, not just the top of the ranking,
+    so it can separate models whose top lists are nearly the same.
+    """
+    y = np.asarray(y, dtype=float)
+    mu = np.clip(np.asarray(pred, dtype=float), 1e-12, None)
+    log_term = np.where(y > 0, y * np.log(np.where(y > 0, y, 1) / mu), 0.0)
+    return float(np.mean(2 * (log_term - (y - mu))))
 
 
 def poisson_interval(count, level: float = 0.95) -> tuple[np.ndarray, np.ndarray]:
@@ -140,3 +155,43 @@ def evaluate(
         pd.concat(calibration).reset_index(),
         pd.concat(predictions),
     )
+
+
+def pooled_holdout(
+    make_model: Callable[[], CountModel],
+    panel: pd.DataFrame,
+    test_years: tuple[int, ...] = ValidationConfig.test_years,
+    top_k: tuple[int, ...] = ValidationConfig.top_k,
+    y_col: str = "ksi",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fit once on years before the test window and evaluate each site's total
+    over the window.
+
+    Every site is scored from its row for the first test year, whose lag features
+    end before the window; later rows' lags include test-window crashes, so using
+    them would leak the outcome into the prediction. The predicted total is that
+    yearly rate times the number of test years. Summing several years gives each
+    site a larger, less noisy count than a single test year.
+
+    Returns (metrics, site_totals): `metrics` has top-k capture per k plus
+    `deviance` (k = NA); `site_totals` has each site's observed and predicted total.
+    """
+    first = min(test_years)
+    train = panel[panel["year"] < first]
+    model = make_model().fit(train, train[y_col], groups=train["site_id"])
+    start = panel[panel["year"] == first].set_index("site_id")
+    observed = panel[panel["year"].isin(test_years)].groupby("site_id")[y_col].sum()
+    totals = pd.DataFrame(
+        {
+            y_col: observed,
+            "pred": model.predict(start).reindex(observed.index) * len(test_years),
+        }
+    ).reset_index()
+    y, pred = totals[y_col], totals["pred"]
+    metrics = [
+        {"metric": "capture", "k": k, "value": top_k_capture(y, pred, k)} for k in top_k
+    ]
+    metrics.append(
+        {"metric": "deviance", "k": pd.NA, "value": poisson_deviance(y, pred)}
+    )
+    return pd.DataFrame(metrics), totals

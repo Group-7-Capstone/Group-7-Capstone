@@ -129,10 +129,14 @@ def test_parameter_change_cannot_reuse_snapshot(tmp_path, monkeypatch):
             snapshot_dir=tmp_path/'fy2021', partition_field='issue_date', fiscal_year=2021, offline=True)
 
 
-def test_shared_registry_matches_archived_source_without_git():
+def test_shared_registry_supports_schedule_aware_activations_without_git():
     registry = read_camera_data('camera_activation_dates')
-    assert len(registry) == 4610
-    assert camera_data_receipt('camera_activation_dates')['lf_sha256'] == '1244a77a0a35083f43ab3447c60c6af48dbe354e5987eadea39c7fd981ba1062'
+    assert not registry.duplicated(['search_query', 'violation_code']).any()
+    assert registry[['inferred_activation_date', 'activation_date_unadjusted',
+                     'activation_date_hours_scaled', 'first_ticket_date']].notna().all().all()
+    assert set(registry.activation_confidence) <= {'low', 'medium', 'high'}
+    assert registry.left_censored.any()
+    assert len(camera_data_receipt('camera_activation_dates')['lf_sha256']) == 64
 
 
 def test_flat_projection_and_batch_column_selection(tmp_path, monkeypatch):

@@ -8,13 +8,20 @@ so no site extends more than `radius_ft` from its center.
 
 Every crash (any year) is then assigned to its nearest center within
 `radius_ft`; crashes farther than that stay unassigned (NA).
+
+With `SiteConfig.source == "lion"` sites come from the street network instead:
+merged LION intersections, plus (if `midblock`) one site per street segment for
+crashes away from intersections.
 """
 
 import logging
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from pyproj import Transformer
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
 from preprocessing.config import SiteConfig
@@ -134,5 +141,105 @@ def assign_sites(
         (~matched & after).sum(),
         after.sum(),
         config.build_end,
+    )
+    return crashes.assign(site_id=site_id)
+
+
+def build_intersection_sites(
+    intersections: pd.DataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """One site per intersection: LION intersection nodes (`node_id`, `x`, `y`,
+    `legs`, as from `roadway.find_intersections`) within `node_merge_ft` of each
+    other are merged, since a divided road meets a street at several nodes.
+
+    Returns `site_id`, centroid `x`, `y`, `n_nodes` and `legs` (the most at any node).
+    """
+    xy = intersections[["x", "y"]].to_numpy()
+    pairs = cKDTree(xy).query_pairs(config.node_merge_ft, output_type="ndarray")
+    n = len(xy)
+    graph = coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), (n, n))
+    _, label = connected_components(graph, directed=False)
+    sites = (
+        intersections.assign(site_id=label)
+        .groupby("site_id")
+        .agg(
+            x=("x", "mean"),
+            y=("y", "mean"),
+            n_nodes=("node_id", "size"),
+            legs=("legs", "max"),
+        )
+        .reset_index()
+    )
+    log.info(
+        "build_intersection_sites: %d intersection nodes -> %d sites (%d merged)",
+        n,
+        len(sites),
+        (sites["n_nodes"] > 1).sum(),
+    )
+    return sites
+
+
+def build_midblock_sites(segments: gpd.GeoDataFrame, first_id: int) -> gpd.GeoDataFrame:
+    """One site per LION street segment (`SegmentID`), i.e. one block between two
+    nodes, numbered from `first_id` so ids don't collide with intersection sites.
+
+    `segments` should hold one centerline per street (LION's generic segments).
+    Returns `site_id`, the segment's midpoint `x`, `y`, `length_ft` and its geometry.
+    """
+    blocks = segments.drop_duplicates("SegmentID").reset_index(drop=True)
+    mid = blocks.geometry.interpolate(0.5, normalized=True)
+    log.info("build_midblock_sites: %d street segments", len(blocks))
+    return gpd.GeoDataFrame(
+        {
+            "site_id": np.arange(first_id, first_id + len(blocks)),
+            "x": mid.x.to_numpy(),
+            "y": mid.y.to_numpy(),
+            "length_ft": blocks.geometry.length.to_numpy(),
+        },
+        geometry=blocks.geometry.to_numpy(),
+        crs=segments.crs,
+    )
+
+
+def assign_unmatched_to_blocks(
+    crashes: pd.DataFrame, blocks: gpd.GeoDataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """Give crashes without a `site_id` the nearest block within `radius_ft`."""
+    todo = crashes.index[crashes["site_id"].isna()]
+    points = gpd.GeoSeries(
+        gpd.points_from_xy(crashes.loc[todo, "x"], crashes.loc[todo, "y"]),
+        crs=blocks.crs,
+    )
+    point_i, block_i = blocks.sindex.nearest(points, max_distance=config.radius_ft)
+    # Ties (equidistant blocks) return several rows per point; keep the first.
+    first = ~pd.Series(point_i).duplicated().to_numpy()
+    site_id = crashes["site_id"].copy()
+    site_id[todo[point_i[first]]] = blocks["site_id"].to_numpy()[block_i[first]]
+    log.info(
+        "assign_unmatched_to_blocks: %d of %d crashes off intersections matched to "
+        "a block; %d stay unassigned",
+        first.sum(),
+        len(todo),
+        len(todo) - first.sum(),
+    )
+    return crashes.assign(site_id=site_id)
+
+
+def assign_nearest_site(
+    crashes: pd.DataFrame, sites: pd.DataFrame, config: SiteConfig
+) -> pd.DataFrame:
+    """Add `site_id` to each crash: the nearest site centroid within `radius_ft`."""
+    dist, idx = cKDTree(sites[["x", "y"]].to_numpy()).query(
+        crashes[["x", "y"]].to_numpy(), distance_upper_bound=config.radius_ft
+    )
+    matched = np.isfinite(dist)
+    site_id = pd.Series(pd.NA, index=crashes.index, dtype="Int64")
+    site_id[matched] = sites["site_id"].to_numpy()[idx[matched]]
+    log.info(
+        "assign_nearest_site: %d of %d crashes (%.1f%%) within %.0f ft of a site",
+        matched.sum(),
+        len(crashes),
+        100 * matched.mean(),
+        config.radius_ft,
     )
     return crashes.assign(site_id=site_id)
