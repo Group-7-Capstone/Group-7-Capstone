@@ -223,3 +223,14 @@ class PedestrianConfig:
     # 12:30-1:30 PM, 5-6 PM), the exposure denominator in Sevtsuk et al.'s crash
     # analysis. A site takes the busiest segment within the radius.
     volume_columns: tuple[str, ...] = ("predwkdyAM", "predwkdyMD", "predwkdyPM")
+
+
+# Issue #58: fixed before looking at validation half B. Weeks are Monday-Sunday.
+TICKET_REVISION_CONFIG = {
+    "established_weeks": 52, "minimum_references": 20,
+    "horizon_weeks": 52, "window_weeks": 13, "minimum_window_weeks": 8,
+    "activation_confidences": ("high", "medium"),
+    "numeric_features": ("lanes", "width_ft", "ped_volume"),
+    "categorical_features": ("direction_pair",),
+    "minimum_group_size": 10, "minimum_stratum_size": 2, "alpha": 0.05,
+}
