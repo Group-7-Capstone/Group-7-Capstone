@@ -243,3 +243,17 @@ def download_nycwalks(force: bool = False) -> None:
         return
     _download_zip(NYCWALKS_URL, NYCWALKS_DIR)
     _log_provenance("nycwalks", NYCWALKS_SOURCE, NYCWALKS_URL)
+
+
+# DOT Automated Traffic Volume Counts: 15-minute vehicle counts by direction on LION
+# street segments, from short (usually 1-2 week) count studies since 2000.
+TRAFFIC_COUNTS_ID = "7ym2-wayt"
+# Every row has a year from 2000 on, so this keeps the whole dataset (~1.9M rows).
+TRAFFIC_COUNTS_WHERE = "yr >= 2000"
+
+
+def download_traffic_counts(force: bool = False) -> int:
+    """Pull every Automated Traffic Volume Count into table `traffic_counts`."""
+    return fetch_soda(
+        TRAFFIC_COUNTS_ID, "traffic_counts", TRAFFIC_COUNTS_WHERE, force=force
+    )
