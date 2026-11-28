@@ -51,4 +51,9 @@ DOT agreed (Nov 2026) that we focus on **speed cameras**. About 3,000 speed came
 - **Still to check:** injury and pedestrian-injury outcomes. `NegativeBinomialModel` doesn't converge on them, which needs a model-layer fix.
 - **MapPLUTO (#33 part 2):** test it only as an addition to road-only + pedestrian.
 
-Combine it with the other exposure proxies: traffic counts (#35), LION road class and lanes, and Citi Bike (#51). Following the paper, report results under several exposure versions rather than relying on one.
+Combine it with the other exposure proxies: LION road class and lanes, and Citi Bike (#51). Following the paper, report results under several exposure versions rather than relying on one.
+
+**Traffic counts (#35), in review: don't use.** `preprocessing/traffic.py` turns DOT's Automated Traffic Volume Counts (`7ym2-wayt`, `data.download.download_traffic_counts()`) into weekday daily traffic per site, and `experiments/traffic_exposure.ipynb` tests it.
+- Counts reach only 4.5% of sites (11.5% of KSI, 9.4% of speed-camera sites), mostly big roads. Filling in the rest from road features gives a cross-validated R² of 0.24.
+- On the road-only + pedestrian model, no version (counted flag, imputed, counted-else-imputed, counted sites only) changes top-k KSI capture beyond noise. After road and pedestrian features, traffic is 1.05× KSI per doubling (0.95 to 1.17).
+- Only a source that covers every segment (e.g. NYSDOT AADT) would be worth revisiting.

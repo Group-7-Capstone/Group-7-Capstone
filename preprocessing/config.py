@@ -223,3 +223,14 @@ class PedestrianConfig:
     # 12:30-1:30 PM, 5-6 PM), the exposure denominator in Sevtsuk et al.'s crash
     # analysis. A site takes the busiest segment within the radius.
     volume_columns: tuple[str, ...] = ("predwkdyAM", "predwkdyMD", "predwkdyPM")
+
+
+@dataclass(frozen=True)
+class TrafficConfig:
+    # Counted LION segments within this many feet of a site centroid describe the
+    # site (same as SiteConfig.radius_ft). A site takes the busiest one.
+    radius_ft: float = 100.0
+    # A count day is used only if it has all 96 15-minute intervals and falls on a
+    # weekday, so partial days and weekends don't mix into one average.
+    intervals_per_day: int = 96
+    weekdays: tuple[int, ...] = (0, 1, 2, 3, 4)

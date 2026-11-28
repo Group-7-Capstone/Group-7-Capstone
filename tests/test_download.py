@@ -138,3 +138,12 @@ def test_download_nycwalks_unzips_shapefile_and_logs_provenance(tmp_path, monkey
             "SELECT table_name, dataset_id, query FROM _provenance"
         ).fetchall()
     assert logged == [("nycwalks", download.NYCWALKS_SOURCE, urls[0])]
+
+
+def test_download_traffic_counts_pulls_the_whole_dataset(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        download, "fetch_soda", lambda *args, **kwargs: calls.append(args) or 7
+    )
+    assert download.download_traffic_counts() == 7
+    assert calls == [("7ym2-wayt", "traffic_counts", "yr >= 2000")]
